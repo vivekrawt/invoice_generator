@@ -1,21 +1,17 @@
 import { NextResponse } from "next/server";
-import { deleteLocalSession, LOCAL_SESSION_COOKIE } from "@/lib/local/auth";
-import { getSessionToken, requireSameOrigin } from "@/lib/local/http";
-
-export const runtime = "nodejs";
+import { apiError, requireSameOrigin } from "@/lib/supabase/http";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
 
-  deleteLocalSession(getSessionToken(request));
-  const response = NextResponse.json({ data: { signedOut: true } });
-  response.cookies.set(LOCAL_SESSION_COOKIE, "", {
-    httpOnly: true,
-    sameSite: "strict",
-    secure: false,
-    path: "/",
-    maxAge: 0,
-  });
-  return response;
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase.auth.signOut({ scope: "local" });
+    if (error && error.name !== "AuthSessionMissingError") throw error;
+    return NextResponse.json({ data: { signedOut: true } });
+  } catch (error) {
+    return apiError(error);
+  }
 }

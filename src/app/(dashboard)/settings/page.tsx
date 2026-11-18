@@ -18,8 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ChangeLocalPasswordForm } from "@/components/auth/change-local-password-form";
-import { jsonBody, localApi } from "@/lib/local/client";
+import { ChangeSharedPasswordForm } from "@/components/auth/change-shared-password-form";
+import { apiRequest, jsonBody } from "@/lib/api-client";
 import type { BusinessProfile } from "@/types/database.types";
 
 const defaultProfile: Omit<BusinessProfile, "created_at" | "updated_at"> = {
@@ -65,7 +65,7 @@ export default function SettingsPage() {
     async function loadProfile() {
       try {
         setLoading(true);
-        const bp = await localApi<BusinessProfile>("/api/data/business-profile");
+        const bp = await apiRequest<BusinessProfile>("/api/data/business-profile");
         if (!active) return;
         setProfile({
           ...defaultProfile,
@@ -138,7 +138,7 @@ export default function SettingsPage() {
       }
 
       setMessage({
-        text: `${type === "logo" ? "Company Logo" : "Payment QR code"} saved on this PC.`,
+        text: `${type === "logo" ? "Company Logo" : "Payment QR code"} uploaded. Save business settings to apply it.`,
         type: "success",
       });
     } catch (err: unknown) {
@@ -180,7 +180,7 @@ export default function SettingsPage() {
         default_terms: profile.default_terms?.trim() || null,
       };
 
-      const savedProfile = await localApi<BusinessProfile>("/api/data/business-profile", {
+      const savedProfile = await apiRequest<BusinessProfile>("/api/data/business-profile", {
         method: "PUT",
         body: jsonBody(payload),
       });
@@ -469,7 +469,7 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Section 3: Local branding assets */}
+        {/* Section 3: Branding assets */}
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
             <div className="flex items-center gap-2">
@@ -479,7 +479,7 @@ export default function SettingsPage() {
               </CardTitle>
             </div>
             <CardDescription className="text-xs text-slate-500">
-              Uploaded assets are stored in this PC&apos;s local data folder and embedded in generated PDFs
+              Logo and QR images are stored in your private Supabase Storage bucket and used in generated PDFs.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-4 sm:p-6 space-y-6">
@@ -514,7 +514,7 @@ export default function SettingsPage() {
                     <div className="space-y-1.5 flex flex-col items-center">
                       <ImageIcon className="h-8 w-8 text-slate-300" />
                       <p className="text-xs text-slate-500">
-                        PNG or JPG (Recommended: 300x100px)
+                        PNG, JPEG, or WebP (Recommended: 300x100px)
                       </p>
                     </div>
                   )}
@@ -636,7 +636,7 @@ export default function SettingsPage() {
           </Button>
         </div>
       </form>
-      <ChangeLocalPasswordForm />
+      <ChangeSharedPasswordForm />
     </div>
   );
 }

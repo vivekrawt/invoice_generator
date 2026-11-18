@@ -25,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { InvoicePDFActions } from "@/components/invoices/invoice-pdf-actions";
-import { localApi } from "@/lib/local/client";
+import { apiRequest } from "@/lib/api-client";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Invoice } from "@/types/database.types";
 
@@ -48,7 +48,7 @@ export default function InvoicesPage() {
     setLoading(true);
     setErrorMessage(null);
     try {
-      setInvoices(await localApi<Invoice[]>("/api/data/invoices"));
+      setInvoices(await apiRequest<Invoice[]>("/api/data/invoices"));
     } catch (error) {
       setErrorMessage(error instanceof Error ? `Invoices could not be loaded: ${error.message}` : "Invoices could not be loaded.");
       setInvoices([]);
@@ -99,7 +99,7 @@ export default function InvoicesPage() {
     setDeleting(true);
     setErrorMessage(null);
     try {
-      await localApi(`/api/data/invoices/${invoiceToDelete.id}`, { method: "DELETE" });
+      await apiRequest(`/api/data/invoices/${invoiceToDelete.id}`, { method: "DELETE" });
       setInvoices((current) => current.filter((invoice) => invoice.id !== invoiceToDelete.id));
       setInvoiceToDelete(null);
     } catch (error) {

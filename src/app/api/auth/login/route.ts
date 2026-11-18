@@ -1,37 +1,26 @@
 import { NextResponse } from "next/server";
-import {
-  createLocalSession,
-  hasLocalPassword,
-  LOCAL_SESSION_COOKIE,
-  verifyLocalPassword,
-} from "@/lib/local/auth";
-import { apiError, requireSameOrigin } from "@/lib/local/http";
-
-export const runtime = "nodejs";
+import { requireSameOrigin, apiError } from "@/lib/supabase/http";
+import { createSupabaseServerClient, getSharedAuthEmail } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
 
   try {
-    if (!hasLocalPassword()) {
-      return NextResponse.json({ error: "Create a local password before signing in." }, { status: 409 });
-    }
     const body = await request.json() as { password?: unknown };
-    if (typeof body.password !== "string" || !verifyLocalPassword(body.password)) {
-      return NextResponse.json({ error: "The password is incorrect." }, { status: 401 });
+    if (typeof body.password !== "string" || body.password.length < 12 || body.password.length > 128) {
+      return NextResponse.json({ error: "Enter the shared password (12 to 128 characters)." }, { status: 400 });
     }
 
-    const { token } = createLocalSession();
-    const response = NextResponse.json({ data: { signedIn: true } });
-    response.cookies.set(LOCAL_SESSION_COOKIE, token, {
-      httpOnly: true,
-      sameSite: "strict",
-      secure: false,
-      path: "/",
-      maxAge: 30 * 24 * 60 * 60,
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase.auth.signInWithPassword({
+      email: getSharedAuthEmail(),
+      password: body.password,
     });
-    return response;
+    if (error) {
+      return NextResponse.json({ error: "The shared password is incorrect." }, { status: 401 });
+    }
+    return NextResponse.json({ data: { signedIn: true } });
   } catch (error) {
     return apiError(error);
   }

@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { jsonBody, localApi } from "@/lib/local/client";
+import { apiRequest, jsonBody } from "@/lib/api-client";
 
-export function ChangeLocalPasswordForm() {
+export function ChangeSharedPasswordForm() {
   const [currentPassword, setCurrentPassword] = React.useState("");
   const [newPassword, setNewPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
@@ -25,17 +25,17 @@ export function ChangeLocalPasswordForm() {
 
     try {
       setBusy(true);
-      await localApi("/api/auth/change-password", {
+      await apiRequest("/api/auth/change-password", {
         method: "POST",
         body: jsonBody({ currentPassword, newPassword, confirmPassword }),
       });
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      setMessage({ text: "Local password changed successfully.", error: false });
+      setMessage({ text: "Shared password changed successfully.", error: false });
     } catch (error) {
       setMessage({
-        text: error instanceof Error ? error.message : "The local password could not be changed.",
+        text: error instanceof Error ? error.message : "The shared password could not be changed.",
         error: true,
       });
     } finally {
@@ -48,10 +48,10 @@ export function ChangeLocalPasswordForm() {
       <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
         <div className="flex items-center gap-2">
           <KeyRound className="h-4 w-4 text-[#0b1f3a]" />
-          <CardTitle className="text-sm font-semibold text-slate-900">Local password</CardTitle>
+          <CardTitle className="text-sm font-semibold text-slate-900">Shared password</CardTitle>
         </div>
         <CardDescription className="text-xs text-slate-500">
-          Change the password used to unlock this PC&apos;s invoice data.
+          Change the shared Supabase Auth password used to access this app.
         </CardDescription>
       </CardHeader>
       <CardContent className="p-4 sm:p-6">

@@ -7,33 +7,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { localApi, jsonBody } from "@/lib/local/client";
+import { apiRequest, jsonBody } from "@/lib/api-client";
 
-export function LocalPasswordForm({ mode }: { mode: "setup" | "login" }) {
+export function SharedPasswordForm() {
   const router = useRouter();
   const [password, setPassword] = React.useState("");
-  const [confirmPassword, setConfirmPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
-    if (mode === "setup" && password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
 
     setLoading(true);
     try {
-      await localApi(mode === "setup" ? "/api/auth/setup" : "/api/auth/login", {
+      await apiRequest("/api/auth/login", {
         method: "POST",
-        body: jsonBody(mode === "setup" ? { password, confirmPassword } : { password }),
+        body: jsonBody({ password }),
       });
       router.replace("/");
       router.refresh();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Could not verify the local password.");
+      setError(requestError instanceof Error ? requestError.message : "Could not sign in.");
     } finally {
       setLoading(false);
     }
@@ -48,19 +43,17 @@ export function LocalPasswordForm({ mode }: { mode: "setup" | "login" }) {
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">ABIRA ENTERPRISES</h1>
           <p className="mt-1 text-xs font-medium uppercase tracking-widest text-slate-500">
-            Local Invoice Manager
+            Invoice Manager
           </p>
         </div>
 
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="space-y-1 pb-4">
             <CardTitle className="text-xl font-semibold text-slate-900">
-              {mode === "setup" ? "Create your local password" : "Unlock your invoices"}
+              Access your invoices
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
-              {mode === "setup"
-                ? "This password protects invoice data stored on this PC. It is saved as a secure hash."
-                : "Enter your local password to continue on this PC."}
+              Enter the shared password to access the hosted invoice manager.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -73,14 +66,14 @@ export function LocalPasswordForm({ mode }: { mode: "setup" | "login" }) {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="password">{mode === "setup" ? "New password" : "Password"}</Label>
+                <Label htmlFor="password">Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                   <Input
                     id="password"
                     type="password"
-                    autoComplete={mode === "setup" ? "new-password" : "current-password"}
-                    minLength={mode === "setup" ? 12 : undefined}
+                    autoComplete="current-password"
+                    minLength={12}
                     maxLength={128}
                     required
                     value={password}
@@ -90,36 +83,19 @@ export function LocalPasswordForm({ mode }: { mode: "setup" | "login" }) {
                 </div>
               </div>
 
-              {mode === "setup" && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="confirm-password">Confirm password</Label>
-                  <Input
-                    id="confirm-password"
-                    type="password"
-                    autoComplete="new-password"
-                    minLength={12}
-                    maxLength={128}
-                    required
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                  />
-                  <p className="text-[11px] text-slate-500">Use at least 12 characters.</p>
-                </div>
-              )}
-
               <Button
                 type="submit"
                 disabled={loading}
                 className="flex w-full items-center justify-center gap-2 bg-[#0b1f3a] text-white hover:bg-[#132c50]"
               >
-                {loading ? "Please wait..." : mode === "setup" ? "Set password" : "Unlock"}
+                {loading ? "Signing in..." : "Sign in"}
                 {!loading && <ArrowRight className="h-4 w-4" />}
               </Button>
             </form>
 
             <div className="mt-5 flex items-center justify-center gap-1 border-t border-slate-100 pt-4 text-[11px] text-slate-400">
               <Building2 className="h-3 w-3" />
-              <span>Stored locally on this PC</span>
+              <span>Single shared password</span>
             </div>
           </CardContent>
         </Card>

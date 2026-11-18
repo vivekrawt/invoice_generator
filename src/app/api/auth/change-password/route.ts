@@ -1,20 +1,15 @@
 import { NextResponse } from "next/server";
-import {
-  changeLocalPassword,
-  createLocalSession,
-  LOCAL_SESSION_COOKIE,
-} from "@/lib/local/auth";
-import { apiError, requireLocalAuth, requireSameOrigin } from "@/lib/local/http";
-
-export const runtime = "nodejs";
+import { apiError, requireAppAuth, requireSameOrigin } from "@/lib/supabase/http";
+import { getSharedAuthEmail } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
-  const authError = requireLocalAuth(request);
-  if (authError) return authError;
   const originError = requireSameOrigin(request);
   if (originError) return originError;
 
   try {
+    const auth = await requireAppAuth();
+    if (!auth.ok) return auth.response;
+
     const body = await request.json() as {
       currentPassword?: unknown;
       newPassword?: unknown;
@@ -33,20 +28,19 @@ export async function POST(request: Request) {
     if (body.newPassword.length < 12 || body.newPassword.length > 128) {
       return NextResponse.json({ error: "Choose a password between 12 and 128 characters." }, { status: 400 });
     }
-    if (!changeLocalPassword(body.currentPassword, body.newPassword)) {
+
+    const email = getSharedAuthEmail();
+    const { error: verifyError } = await auth.context.supabase.auth.signInWithPassword({
+      email,
+      password: body.currentPassword,
+    });
+    if (verifyError) {
       return NextResponse.json({ error: "The current password is incorrect." }, { status: 401 });
     }
 
-    const { token } = createLocalSession();
-    const response = NextResponse.json({ data: { changed: true } });
-    response.cookies.set(LOCAL_SESSION_COOKIE, token, {
-      httpOnly: true,
-      sameSite: "strict",
-      secure: false,
-      path: "/",
-      maxAge: 30 * 24 * 60 * 60,
-    });
-    return response;
+    const { error: updateError } = await auth.context.supabase.auth.updateUser({ password: body.newPassword });
+    if (updateError) throw updateError;
+    return NextResponse.json({ data: { changed: true } });
   } catch (error) {
     return apiError(error);
   }

@@ -14,7 +14,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { localApi } from "@/lib/local/client";
+import { apiRequest } from "@/lib/api-client";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Invoice, BusinessProfile } from "@/types/database.types";
 
@@ -38,7 +38,7 @@ export default function DashboardPage() {
     async function loadDashboardData() {
       try {
         setLoading(true);
-        const data = await localApi<DashboardData>("/api/data/dashboard");
+        const data = await apiRequest<DashboardData>("/api/data/dashboard");
         setInvoicesCount(data.invoicesCount);
         setCustomersCount(data.customersCount);
         setProductsCount(data.productsCount);

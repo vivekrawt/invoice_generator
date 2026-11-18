@@ -1,23 +1,22 @@
 # ABIRA Enterprises Invoice Generator
 
-A single-PC invoice application for ABIRA Enterprises. It runs only on `127.0.0.1`, uses a local SQLite database and local image files, and does not require Supabase, hosting, or a network account. Invoices are real saved records; PDFs are generated with `@react-pdf/renderer`. There is no payment tracking or payment gateway.
+A hosted, single-account invoice application for ABIRA Enterprises. Next.js runs on Vercel, with Supabase Auth, Postgres, and private Storage for persistent data. The application has one shared password, no roles, and no public sign-up flow.
 
 ## Features
 
-- Local password setup, sign-in, and password change; protected dashboard and data APIs.
+- Shared-password sign-in through one fixed Supabase Auth account; password changes apply to the shared account.
 - Create, search, filter, sort, edit, duplicate, print, download, and permanently delete invoices.
-- Invoice, customer, business, and shipping snapshots preserve historical invoice details.
-- Customer and product create/edit/delete; initial product catalogue is seeded from the included brochure.
-- Business profile, bank details, terms, logo, and QR settings.
-- PNG, JPEG, and WebP uploads (up to 2 MiB) are stored in the local data directory.
+- Supabase stores customers, products, invoices, invoice items, and business settings. Dashboard counts are calculated from those records.
+- Invoice customer, shipping, and business snapshots preserve historical invoice details.
+- Private Supabase Storage for logo and payment QR images.
 - Responsive dashboard and A4 PDF generation.
+- No payment tracking, gateway, subscription, or service-role key in the application.
 
 ## Technologies
 
-- Next.js 14 App Router, React 18, TypeScript, and Tailwind CSS.
-- SQLite via `better-sqlite3`; password hashes use Node.js `scrypt`.
+- Next.js 16 App Router, React, TypeScript, and Tailwind CSS.
+- Supabase Auth, Postgres with Row Level Security, and private Storage.
 - `@react-pdf/renderer` for PDF preview, download, and print.
-- No paid services or cloud integrations.
 
 ## Project structure
 
@@ -25,84 +24,81 @@ A single-PC invoice application for ABIRA Enterprises. It runs only on `127.0.0.
 src/
   app/
     (dashboard)/         Invoice, customer, product, dashboard, and settings pages
-    api/                 Authenticated local data and asset APIs
-    login/               First-run password setup and sign-in
+    api/                 Authenticated data, auth, and asset APIs
+    login/               Shared-password sign-in
   components/            Forms, responsive navigation, and PDF components
   lib/
-    local/               SQLite schema/store, local sessions, and API helpers
-    constants/           Invoice defaults and brochure product catalogue
-    number-to-words.ts   Indian currency and financial-year helpers
-tests/                   Invoice utility and isolated SQLite/authentication tests
-data/                    Created on first run; SQLite database and uploaded assets
+    supabase/            Server client, RLS-aware store, and database types
+    invoice-validation.ts Server-side invoice validation
+    constants/            Brochure product catalogue
+supabase/
+  migrations/             Database, RLS, invoice RPC, and Storage setup
+tests/                    Invoice and asset validation tests
 ```
 
-## Requirements and local setup
+## Supabase setup
 
-Use Windows with Node.js 22.6 or newer and npm.
+Use the existing Supabase project or a new one:
+
+1. In Supabase **Authentication → Users**, keep or create exactly one account for the app. Set its email to the value you will use for `SUPABASE_AUTH_EMAIL`, and set the shared password there. The app login asks only for the password.
+2. Disable public sign-ups in Supabase Auth settings. Do not create additional app accounts; there are no roles.
+3. Apply [`20261119000000_invoice_app.sql`](./supabase/migrations/20261119000000_invoice_app.sql) in the Supabase SQL Editor. It creates or upgrades the app tables, assigns existing Supabase rows to the single Auth user, enables owner-scoped RLS, creates the atomic invoice-save function, and configures the private `abira-business-assets` bucket. This new bucket leaves any older public asset bucket and its existing invoice URLs unchanged.
+   - The migration stops unless exactly one Supabase Auth user exists. It does not delete existing Supabase invoice/customer/product rows.
+   - The local SQLite database is deliberately **not** imported. It remains on the PC under `data/`, which is ignored by Git.
+4. Copy `.env.example` to `.env.local` and fill in the project URL, anon/publishable key, and the exact fixed Auth email. Never put a service-role key in the app or expose it to the browser; this app does not need one.
+5. On first authenticated use, the app creates the business profile if missing and synchronizes the included catalogue without replacing existing product IDs.
+
+The anon/publishable key is intended for app use; RLS restricts database and Storage access to the authenticated owner. All database access goes through server-side routes. Supabase Auth handles password hashing, session cookies, and sign-in rate limits.
+
+## Local development
+
+Use Node.js 22 or newer:
 
 ```powershell
 npm ci
+Copy-Item .env.example .env.local
+# Edit .env.local with the Supabase values above.
 npm run dev
 ```
 
-Open `http://127.0.0.1:3000`. On first use, set a local password (12–128 characters); there is no default password. Keep the password private. The server binds to loopback only and is not intended to be exposed to a LAN or the internet.
+Open `http://127.0.0.1:3000`. For local development, the application still needs the configured Supabase project and network access. The old local SQLite records are not shown in the hosted database.
 
-The application creates `data\abira-invoices.sqlite` and `data\assets\` automatically. To keep the database and uploaded files outside the project folder, set the optional `ABIRA_DATA_DIR` before starting Next.js:
+## Vercel deployment
 
-```powershell
-$env:ABIRA_DATA_DIR = "$env:USERPROFILE\Documents\ABIRA-Invoice-Data"
-npm run dev
-```
+1. Import `vivekrawt/invoice_generator` into Vercel and select the `main` branch.
+2. Add `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_AUTH_EMAIL` to Vercel’s Production Environment Variables. Do not prefix these server-only variables with `NEXT_PUBLIC_`. For Preview deployments, use a separate Supabase project and Auth account; do not point previews at production data.
+3. Deploy with the default Next.js framework settings (`npm ci` and `npm run build`).
+4. Open the deployed site, sign in with the shared password, and verify settings, products, contacts, invoices, PDF preview/download, and uploads.
 
-The same environment variable can be placed in an ignored `.env.local`. No environment variables are required for normal use; `.env.example` documents the optional data-directory override.
+Vercel’s filesystem is temporary, so no database or uploaded file is stored on the Vercel instance. Supabase is the persistent backend.
 
-## Database and backups
+### Hosting plan and free-tier limits
 
-SQLite tables are initialized automatically on first startup; no external database or manual migration command is required. The local schema stores the business profile, customers, products, invoices, invoice items, password credentials, sessions, and uploaded-asset metadata. Invoice items are deleted with their invoice; deleting a customer or product does not erase the invoice's saved snapshots or line descriptions.
+Supabase Free currently includes 500 MB database storage, 1 GB file storage, 5 GB uncached egress, 5 GB cached egress, and 50,000 monthly active users. Free projects may be paused after one week of inactivity and the plan is limited to two active projects. That means the first request after inactivity may require resuming the project. Review the [current Supabase pricing and quotas](https://supabase.com/pricing) before launch.
 
-To back up the application, stop the server and copy the entire data directory, including `abira-invoices.sqlite`, its SQLite journal/WAL files if present, and `assets\`. Restore by placing the copy back in the same data directory before starting the application. Do not copy only the main SQLite file while the app is running.
+Vercel Hobby is free but its current Terms of Service limit it to personal or non-commercial use. Since this application creates ABIRA business invoices, use Vercel Pro or a host whose plan permits commercial use; do not deploy this business workload on Hobby. Vercel quotas and overage behavior vary by plan and can change; see the [Hobby plan limits](https://vercel.com/docs/plans/hobby), [fair-use guidelines](https://vercel.com/docs/limits/fair-use-guidelines), and [Terms of Service](https://vercel.com/legal/terms#hobby-plan).
 
-The password is an application login gate, not disk encryption. Protect the Windows account and the data directory with normal OS access controls. Anyone with direct access to the files can read or modify the database.
-
-If you forget the password, stop the server and run this from the project folder to reset only the local login (invoices and settings remain):
-
-```powershell
-node -e "const Database=require('better-sqlite3'); const db=new Database('data/abira-invoices.sqlite'); db.prepare('DELETE FROM local_sessions').run(); db.prepare('DELETE FROM local_credentials').run(); db.close();"
-```
-
-If `ABIRA_DATA_DIR` points elsewhere, replace the database path in that command with `<ABIRA_DATA_DIR>\abira-invoices.sqlite`. Start the app again and set a new password on the login screen.
-
-## Environment variables
-
-| Variable | Required | Description |
-| --- | --- | --- |
-| `ABIRA_DATA_DIR` | No | Absolute path for the SQLite database and uploaded images. Defaults to `<project>\data`. |
-
-No Supabase, Vercel, service-role, or public API keys are used.
-
-## Tests and production build
+## Validation and tests
 
 ```powershell
 npm test
 npm run lint
 npm run build
-npm start
 ```
 
-`npm start` serves the production build on `127.0.0.1:3000`. Before release, also exercise the app manually:
+Automated tests cover invoice financial-year and amount-in-words helpers, invoice input validation, and image type/signature checks. Authenticated database and Storage integration tests require valid Supabase configuration and should be exercised against the target project before production use.
 
-- Create invoices with 1, 5, and 20 rows; omit GSTIN; set a separate shipping address; use custom products and manual prices.
-- Check zero/negative quantities, invalid rates, duplicate invoice numbers, and dates before and after April 1.
-- Edit and duplicate invoices; verify snapshots, invoice number uniqueness, and that duplicates do not overwrite originals.
-- Create, edit, and delete customers and products; change business details and uploaded images.
-- Verify A4 PDF business/customer details, item alignment, totals, QR, bank details, terms, multi-page layout, download, and print.
-- Check dashboard, invoice tables, form, navigation, and PDF actions at desktop, tablet, and mobile widths.
+## Security and operations
 
-Automated tests use a throwaway SQLite database and cover customer/product CRUD, invoice create/edit/delete, 1/5/20-row saves, number uniqueness, date/FY validation, snapshot retention, cascade deletion, amount-in-words calculation, and local password/session behavior.
+- Keep the Supabase project restricted to the single app account, and keep public sign-ups disabled.
+- Every app table has RLS enabled and is scoped to the authenticated user. The Storage bucket is private and owner-scoped.
+- The app validates invoice inputs on the server and saves invoices/items in one database transaction.
+- Removing or replacing a logo/QR changes the current business profile but retains old private image objects so historical invoice snapshots keep rendering.
+- Password recovery is managed through the Supabase Auth dashboard. Changing the password in Settings updates the single shared Auth account.
+- Back up Supabase data and Storage separately. The local `data/` folder is not a cloud backup.
 
 ## Limitations
 
-- This is a local single-PC application; it has no cloud sync, remote backup, multi-user access, or hosted deployment configuration.
-- Browser automation and long-form end-to-end database/PDF tests are not currently included; the manual checklist above requires verification on the target PC.
-- SQLite and uploaded images are stored as ordinary local files and are not encrypted.
-- Logo and QR image formats are restricted to PNG, JPEG, and WebP, with a 2 MiB per-file limit.
+- This is a single shared-password application, not a multi-user or role-based system.
+- The local SQLite database was intentionally not migrated. It remains a separate backup on the original PC.
+- Automated tests do not replace end-to-end testing against the configured Supabase project; PDF printing and hosted browser workflows require manual verification.

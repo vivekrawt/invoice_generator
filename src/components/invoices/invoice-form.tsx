@@ -23,7 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { CustomerSelect } from "@/components/customers/customer-select";
-import { jsonBody, localApi } from "@/lib/local/client";
+import { apiRequest, jsonBody } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/utils";
 import { convertNumberToIndianWords, getIndianFinancialYear } from "@/lib/number-to-words";
 import { BROCHURE_PRODUCTS, PRODUCT_CATEGORIES } from "@/lib/constants/products-seed";
@@ -136,7 +136,7 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
         if (!active) return;
 
         if (sourceInvoiceId) {
-          const source = await localApi<Invoice>(`/api/data/invoices/${sourceInvoiceId}`);
+          const source = await apiRequest<Invoice>(`/api/data/invoices/${sourceInvoiceId}`);
           const customer = source.customer_snapshot;
           const business = source.business_snapshot;
           if (!customer || !business || !Array.isArray(source.items)) {
@@ -203,7 +203,7 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
           return;
         }
 
-        const businessProfileData = await localApi<BusinessProfile>("/api/data/business-profile");
+        const businessProfileData = await apiRequest<BusinessProfile>("/api/data/business-profile");
         if (active) {
           setBusinessProfile(businessProfileData);
           if (businessProfileData.default_terms) {
@@ -420,7 +420,7 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
       const finalShippingSnapshot = shipToDifferent ? shippingAddress : null;
       const finalAdjustments = typeof adjustments === "number" ? adjustments : 0;
 
-      // 6. Save the invoice and items as one local database transaction.
+      // 6. Save the invoice and items atomically through Supabase.
       const invoicePayload = {
         invoice_number: finalInvoiceNumber,
         financial_year: parsedInvoiceNumber[1],
@@ -467,7 +467,7 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
         total_price: Number(it.line_amount),
       }));
 
-      const savedInvoice = await localApi<Invoice>(
+      const savedInvoice = await apiRequest<Invoice>(
         invoiceId ? `/api/data/invoices/${invoiceId}` : "/api/data/invoices",
         {
           method: invoiceId ? "PUT" : "POST",

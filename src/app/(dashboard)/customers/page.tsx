@@ -32,7 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { jsonBody, localApi } from "@/lib/local/client";
+import { apiRequest, jsonBody } from "@/lib/api-client";
 import type { Customer } from "@/types/database.types";
 
 interface CustomerFormData {
@@ -78,7 +78,7 @@ export default function CustomersPage() {
   const fetchCustomers = React.useCallback(async () => {
     try {
       setLoading(true);
-      setCustomers(await localApi<Customer[]>("/api/data/customers"));
+      setCustomers(await apiRequest<Customer[]>("/api/data/customers"));
     } catch (err) {
       setMessage({
         text: err instanceof Error ? `Customers could not be loaded: ${err.message}` : "Customers could not be loaded.",
@@ -141,14 +141,14 @@ export default function CustomersPage() {
       };
 
       if (editingCustomer) {
-        const saved = await localApi<Customer>(`/api/data/customers/${editingCustomer.id}`, {
+        const saved = await apiRequest<Customer>(`/api/data/customers/${editingCustomer.id}`, {
           method: "PUT",
           body: jsonBody(payload),
         });
         setCustomers((prev) => prev.map((customer) => customer.id === saved.id ? saved : customer));
         setMessage({ text: "Customer details updated successfully.", type: "success" });
       } else {
-        const saved = await localApi<Customer>("/api/data/customers", {
+        const saved = await apiRequest<Customer>("/api/data/customers", {
           method: "POST",
           body: jsonBody(payload),
         });
@@ -173,7 +173,7 @@ export default function CustomersPage() {
 
     try {
       setSaving(true);
-      await localApi(`/api/data/customers/${customerToDelete.id}`, { method: "DELETE" });
+      await apiRequest(`/api/data/customers/${customerToDelete.id}`, { method: "DELETE" });
 
       setCustomers((prev) => prev.filter((c) => c.id !== customerToDelete.id));
       setMessage({ text: "Customer record removed.", type: "success" });

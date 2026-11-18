@@ -1,8 +1,7 @@
 import * as React from "react";
 import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
-import { hasLocalPassword } from "@/lib/local/auth";
-import { hasCurrentLocalSession } from "@/lib/local/session";
+import { getCurrentAppUser } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +10,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  if (!hasLocalPassword() || !(await hasCurrentLocalSession())) {
+  if (!(await getCurrentAppUser())) {
     redirect("/login");
   }
 

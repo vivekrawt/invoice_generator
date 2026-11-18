@@ -1,4 +1,4 @@
-export async function localApi<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -13,9 +13,9 @@ export async function localApi<T>(path: string, init: RequestInit = {}): Promise
   try {
     result = await response.json() as { data?: T; error?: string };
   } catch {
-    throw new Error(`Local request failed with status ${response.status}.`);
+    throw new Error(`Request failed with status ${response.status}.`);
   }
-  if (!response.ok) throw new Error(result.error || `Local request failed with status ${response.status}.`);
+  if (!response.ok) throw new Error(result.error || `Request failed with status ${response.status}.`);
   return result.data as T;
 }
 

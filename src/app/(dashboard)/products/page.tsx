@@ -35,7 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { jsonBody, localApi } from "@/lib/local/client";
+import { apiRequest, jsonBody } from "@/lib/api-client";
 import {
   PRODUCT_CATEGORIES,
 } from "@/lib/constants/products-seed";
@@ -66,7 +66,7 @@ export default function ProductsPage() {
   const fetchProducts = React.useCallback(async () => {
     try {
       setLoading(true);
-      setProducts(await localApi<Product[]>("/api/data/products"));
+      setProducts(await apiRequest<Product[]>("/api/data/products"));
     } catch (err: unknown) {
       console.error("Error fetching products:", err);
       setMessage({
@@ -82,12 +82,12 @@ export default function ProductsPage() {
     fetchProducts();
   }, [fetchProducts]);
 
-  // Seed / Sync brochure items to the local catalogue
+  // Seed / Sync brochure items to the Supabase catalogue.
   const handleSeedBrochure = async () => {
     try {
       setSeeding(true);
       setMessage(null);
-      const { count } = await localApi<{ count: number }>("/api/data/products", {
+      const { count } = await apiRequest<{ count: number }>("/api/data/products", {
         method: "POST",
         body: jsonBody({ action: "sync-brochure" }),
       });
@@ -100,7 +100,7 @@ export default function ProductsPage() {
     } catch (err: unknown) {
       console.error("Error seeding products:", err);
       setMessage({
-        text: err instanceof Error ? `Could not sync the local catalogue: ${err.message}` : "Could not sync the local catalogue.",
+        text: err instanceof Error ? `Could not sync the catalogue: ${err.message}` : "Could not sync the catalogue.",
         type: "error",
       });
     } finally {
@@ -141,14 +141,14 @@ export default function ProductsPage() {
       };
 
       if (editingProduct) {
-        const saved = await localApi<Product>(`/api/data/products/${editingProduct.id}`, {
+        const saved = await apiRequest<Product>(`/api/data/products/${editingProduct.id}`, {
           method: "PUT",
           body: jsonBody(payload),
         });
         setProducts((prev) => prev.map((product) => product.id === saved.id ? saved : product));
         setMessage({ text: "Product updated successfully.", type: "success" });
       } else {
-        const saved = await localApi<Product>("/api/data/products", {
+        const saved = await apiRequest<Product>("/api/data/products", {
           method: "POST",
           body: jsonBody(payload),
         });
@@ -173,7 +173,7 @@ export default function ProductsPage() {
 
     try {
       setSaving(true);
-      await localApi(`/api/data/products/${productToDelete.id}`, { method: "DELETE" });
+      await apiRequest(`/api/data/products/${productToDelete.id}`, { method: "DELETE" });
 
       setProducts((prev) => prev.filter((p) => p.id !== productToDelete.id));
       setMessage({ text: "Product removed from catalogue.", type: "success" });

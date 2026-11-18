@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { localApi } from "@/lib/local/client";
+import { apiRequest } from "@/lib/api-client";
 
 interface NavItem {
   title: string;
@@ -71,7 +71,7 @@ export function Sidebar({
   const handleLogout = async () => {
     try {
       setLoggingOut(true);
-      await localApi("/api/auth/logout", { method: "POST" });
+      await apiRequest("/api/auth/logout", { method: "POST" });
       router.push("/login");
       router.refresh();
     } catch (error) {

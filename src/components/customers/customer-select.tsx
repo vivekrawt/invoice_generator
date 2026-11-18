@@ -5,7 +5,7 @@ import { Search, Plus, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { jsonBody, localApi } from "@/lib/local/client";
+import { apiRequest, jsonBody } from "@/lib/api-client";
 import type { Customer } from "@/types/database.types";
 
 interface CustomerSelectProps {
@@ -44,7 +44,7 @@ export function CustomerSelect({
     try {
       setLoading(true);
       setErrorMessage(null);
-      setCustomers(await localApi<Customer[]>("/api/data/customers"));
+      setCustomers(await apiRequest<Customer[]>("/api/data/customers"));
     } catch (err) {
       setErrorMessage(err instanceof Error ? `Customers could not be loaded: ${err.message}` : "Customers could not be loaded.");
     } finally {
@@ -83,7 +83,7 @@ export function CustomerSelect({
         email: null,
       };
 
-      const customer = await localApi<Customer>("/api/data/customers", {
+      const customer = await apiRequest<Customer>("/api/data/customers", {
         method: "POST",
         body: jsonBody(payload),
       });
