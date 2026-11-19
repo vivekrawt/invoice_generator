@@ -14,6 +14,9 @@ import {
   CheckCircle2,
   Truck,
   Package,
+  Landmark,
+  QrCode,
+  Upload,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -106,8 +109,26 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
   const [additionalNotes, setAdditionalNotes] = React.useState<string>("");
   const [terms, setTerms] = React.useState<string>("");
 
-  // Business Profile Snapshot
+  // Business Profile & Bank Details explicitly for this invoice
   const [businessProfile, setBusinessProfile] = React.useState<BusinessProfile | null>(null);
+  const [bankAccountName, setBankAccountName] = React.useState<string>("");
+  const [bankName, setBankName] = React.useState<string>("");
+  const [accountNumber, setAccountNumber] = React.useState<string>("");
+  const [ifsc, setIfsc] = React.useState<string>("");
+  const [upiId, setUpiId] = React.useState<string>("");
+  const [paymentQrUrl, setPaymentQrUrl] = React.useState<string>("");
+
+  const handleQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setPaymentQrUrl(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Status & Validation states
   const [saving, setSaving] = React.useState(false);
@@ -200,6 +221,12 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
             created_at: source.created_at,
             updated_at: source.updated_at,
           });
+          if (business.bank_account_name) setBankAccountName(business.bank_account_name);
+          if (business.bank_name) setBankName(business.bank_name);
+          if (business.account_number) setAccountNumber(business.account_number);
+          if (business.ifsc) setIfsc(business.ifsc);
+          if (business.upi_id) setUpiId(business.upi_id);
+          if (business.payment_qr_url) setPaymentQrUrl(business.payment_qr_url);
           return;
         }
 
@@ -209,6 +236,12 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
           if (businessProfileData.default_terms) {
             setTerms(businessProfileData.default_terms);
           }
+          if (businessProfileData.bank_account_name) setBankAccountName(businessProfileData.bank_account_name);
+          if (businessProfileData.bank_name) setBankName(businessProfileData.bank_name);
+          if (businessProfileData.account_number) setAccountNumber(businessProfileData.account_number);
+          if (businessProfileData.ifsc) setIfsc(businessProfileData.ifsc);
+          if (businessProfileData.upi_id) setUpiId(businessProfileData.upi_id);
+          if (businessProfileData.payment_qr_url) setPaymentQrUrl(businessProfileData.payment_qr_url);
         }
       } catch (err) {
         if (active) {
@@ -408,13 +441,13 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
         phone: businessProfile.phone,
         email: businessProfile?.email || null,
         pan: businessProfile?.pan || null,
-        bank_account_name: businessProfile?.bank_account_name || null,
-        bank_name: businessProfile?.bank_name || null,
-        account_number: businessProfile?.account_number || null,
-        ifsc: businessProfile?.ifsc || null,
-        upi_id: businessProfile?.upi_id || null,
+        bank_account_name: bankAccountName.trim() || null,
+        bank_name: bankName.trim() || null,
+        account_number: accountNumber.trim() || null,
+        ifsc: ifsc.trim().toUpperCase() || null,
+        upi_id: upiId.trim() || null,
         logo_url: businessProfile?.logo_url || null,
-        payment_qr_url: businessProfile?.payment_qr_url || null,
+        payment_qr_url: paymentQrUrl || null,
       };
 
       const finalShippingSnapshot = shipToDifferent ? shippingAddress : null;
@@ -1096,6 +1129,124 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
           </CardContent>
         </Card>
       </div>
+
+      {/* ============================================================== */}
+      {/* SECTION E: BANK & PAYMENT QR DETAILS (EXPLICITLY FOR THIS INVOICE) */}
+      {/* ============================================================== */}
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader className="py-3 px-4 border-b border-slate-100 bg-slate-50/50 flex flex-row items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Landmark className="h-4 w-4 text-[#0b1f3a]" />
+            <CardTitle className="text-sm font-semibold text-slate-900">
+              E. Settlement & Bank Details (For this Invoice)
+            </CardTitle>
+          </div>
+          <span className="text-[11px] text-slate-500 hidden sm:inline">
+            Configured specifically by the invoice creator
+          </span>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="inv_bank_account_name">Account Holder Name</Label>
+              <Input
+                id="inv_bank_account_name"
+                placeholder="e.g. ABIRA Enterprises"
+                value={bankAccountName}
+                onChange={(e) => setBankAccountName(e.target.value)}
+                className="text-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="inv_bank_name">Bank Name</Label>
+              <Input
+                id="inv_bank_name"
+                placeholder="e.g. HDFC Bank"
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value)}
+                className="text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="inv_account_number">Account Number</Label>
+              <Input
+                id="inv_account_number"
+                placeholder="e.g. 50200012345678"
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value)}
+                className="text-xs font-mono"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="inv_ifsc">IFSC Code</Label>
+              <Input
+                id="inv_ifsc"
+                placeholder="e.g. HDFC0001234"
+                value={ifsc}
+                onChange={(e) => setIfsc(e.target.value)}
+                className="text-xs font-mono uppercase"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="inv_upi_id">UPI ID / VPA</Label>
+              <Input
+                id="inv_upi_id"
+                placeholder="e.g. abira@hdfcbank"
+                value={upiId}
+                onChange={(e) => setUpiId(e.target.value)}
+                className="text-xs font-mono"
+              />
+            </div>
+          </div>
+
+          {/* Payment QR Code Upload */}
+          <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                <QrCode className="h-4 w-4 text-[#0b1f3a]" />
+                Payment QR Code Image
+              </Label>
+              <p className="text-[11px] text-slate-500">
+                Upload or change the QR code to be printed on this invoice.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {paymentQrUrl ? (
+                <div className="flex items-center gap-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={paymentQrUrl}
+                    alt="Payment QR"
+                    className="h-12 w-12 object-contain rounded border border-slate-200 p-0.5 bg-white"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPaymentQrUrl("")}
+                    className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 h-7 px-2"
+                  >
+                    Remove QR
+                  </Button>
+                </div>
+              ) : null}
+              <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-sm">
+                <Upload className="h-3.5 w-3.5" />
+                <span>{paymentQrUrl ? "Change QR Image" : "Upload QR Code"}</span>
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp"
+                  className="hidden"
+                  onChange={handleQrUpload}
+                />
+              </label>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* ============================================================== */}
       {/* SECTION G & H: TERMS AND REMITTANCE PREVIEW                    */}

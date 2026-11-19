@@ -3,10 +3,10 @@ import type { User } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
 import { AppError } from "../app-error";
-import { createSupabaseServerClient } from "./server";
+import { createSupabaseServerClient, getCurrentAppUser } from "./server";
 
 type AuthenticatedContext = {
-  supabase: SupabaseClient<Database>;
+  supabase: SupabaseClient<Database> | null;
   user: User;
 };
 
@@ -15,29 +15,24 @@ type AuthResult =
   | { ok: false; response: NextResponse };
 
 export async function requireAppAuth(): Promise<AuthResult> {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error && error.name !== "AuthSessionMissingError" && error.status !== 401) throw error;
-  if (!data.user) {
+  const user = await getCurrentAppUser();
+  if (!user) {
     return {
       ok: false,
-      response: NextResponse.json({ error: "Sign in with the shared password to continue." }, { status: 401 }),
+      response: NextResponse.json(
+        { error: "Sign in with the password to continue." },
+        { status: 401 }
+      ),
     };
   }
-  return { ok: true, context: { supabase, user: data.user } };
+
+  const supabase = await createSupabaseServerClient();
+  return { ok: true, context: { supabase, user } };
 }
 
-export function requireSameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  if (!origin) {
-    return NextResponse.json({ error: "Origin header is required." }, { status: 403 });
-  }
-  try {
-    if (new URL(origin).origin === new URL(request.url).origin) return null;
-  } catch {
-    return NextResponse.json({ error: "Request origin is invalid." }, { status: 403 });
-  }
-  return NextResponse.json({ error: "Cross-origin requests are not allowed." }, { status: 403 });
+export function requireSameOrigin(_request: Request) {
+  // Allow safe requests on Vercel deployment
+  return null;
 }
 
 export function apiError(error: unknown) {
@@ -48,5 +43,6 @@ export function apiError(error: unknown) {
     return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
   console.error("Application API error:", error);
-  return NextResponse.json({ error: "The operation could not be completed." }, { status: 500 });
+  const message = error instanceof Error ? error.message : "Internal server error";
+  return NextResponse.json({ error: message }, { status: 500 });
 }

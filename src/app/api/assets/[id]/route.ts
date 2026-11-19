@@ -11,6 +11,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Image was not found." }, { status: 404 });
     }
 
+    if (!auth.context.supabase) {
+      return NextResponse.json({ error: "Image storage is not active." }, { status: 404 });
+    }
+
     const asset = await getAsset(auth.context, id);
     if (!asset) return NextResponse.json({ error: "Image was not found." }, { status: 404 });
     const { data, error } = await auth.context.supabase.storage

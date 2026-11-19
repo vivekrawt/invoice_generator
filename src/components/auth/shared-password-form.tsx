@@ -28,7 +28,7 @@ export function SharedPasswordForm() {
       router.replace("/");
       router.refresh();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Could not sign in.");
+      setError(requestError instanceof Error ? requestError.message : "Incorrect password.");
     } finally {
       setLoading(false);
     }
@@ -43,17 +43,17 @@ export function SharedPasswordForm() {
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">ABIRA ENTERPRISES</h1>
           <p className="mt-1 text-xs font-medium uppercase tracking-widest text-slate-500">
-            Invoice Manager
+            Invoice Generator Portal
           </p>
         </div>
 
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="space-y-1 pb-4">
             <CardTitle className="text-xl font-semibold text-slate-900">
-              Access your invoices
+              Access Generator
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
-              Enter the shared password to access the hosted invoice manager.
+              Enter the static password to open the invoice generator.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -66,15 +66,14 @@ export function SharedPasswordForm() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">Access Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                   <Input
                     id="password"
                     type="password"
                     autoComplete="current-password"
-                    minLength={12}
-                    maxLength={128}
+                    placeholder="Enter password"
                     required
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
@@ -88,14 +87,14 @@ export function SharedPasswordForm() {
                 disabled={loading}
                 className="flex w-full items-center justify-center gap-2 bg-[#0b1f3a] text-white hover:bg-[#132c50]"
               >
-                {loading ? "Signing in..." : "Sign in"}
+                {loading ? "Verifying..." : "Open Invoice Generator"}
                 {!loading && <ArrowRight className="h-4 w-4" />}
               </Button>
             </form>
 
             <div className="mt-5 flex items-center justify-center gap-1 border-t border-slate-100 pt-4 text-[11px] text-slate-400">
               <Building2 className="h-3 w-3" />
-              <span>Single shared password</span>
+              <span>Sector 37D, Gurugram, Haryana – 122001</span>
             </div>
           </CardContent>
         </Card>

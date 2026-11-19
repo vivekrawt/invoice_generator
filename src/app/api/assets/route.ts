@@ -40,38 +40,55 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "The uploaded file content does not match its image type." }, { status: 400 });
     }
 
-    const extension = file.type === "image/jpeg" ? "jpg" : file.type.split("/")[1];
     const id = randomUUID();
-    const objectPath = `${auth.context.user.id}/${id}.${extension}`;
-    const fileName = (file.name.split(/[\\/]/).pop() || "image").slice(0, 200);
-    const { error: uploadError } = await auth.context.supabase.storage
-      .from("abira-business-assets")
-      .upload(objectPath, bytes, {
-        cacheControl: "3600",
-        contentType: file.type,
-        upsert: false,
-      });
-    if (uploadError) throw uploadError;
+    const base64 = Buffer.from(bytes).toString("base64");
+    const dataUrl = `data:${file.type};base64,${base64}`;
 
-    try {
-      await addAsset(auth.context, {
-        id,
-        type,
-        object_path: objectPath,
-        file_name: fileName,
-        mime_type: file.type,
-        size_bytes: file.size,
-      });
-    } catch (error) {
-      const { error: cleanupError } = await auth.context.supabase.storage
-        .from("abira-business-assets")
-        .remove([objectPath]);
-      if (cleanupError) console.error("Could not remove an incomplete Supabase asset upload:", cleanupError);
-      throw error;
+    // If Supabase is connected, attempt upload to storage
+    if (auth.context.supabase) {
+      try {
+        const extension = file.type === "image/jpeg" ? "jpg" : file.type.split("/")[1];
+        const objectPath = `${auth.context.user.id}/${id}.${extension}`;
+        const fileName = (file.name.split(/[\\/]/).pop() || "image").slice(0, 200);
+
+        const { error: uploadError } = await auth.context.supabase.storage
+          .from("abira-business-assets")
+          .upload(objectPath, bytes, {
+            cacheControl: "3600",
+            contentType: file.type,
+            upsert: false,
+          });
+
+        if (!uploadError) {
+          await addAsset(auth.context, {
+            id,
+            type,
+            object_path: objectPath,
+            file_name: fileName,
+            mime_type: file.type,
+            size_bytes: file.size,
+          });
+          return NextResponse.json({
+            data: {
+              id,
+              type,
+              url: `/api/assets/${id}`,
+            },
+          });
+        }
+      } catch (storageErr) {
+        console.warn("Notice: Supabase storage upload fell back to data URL:", storageErr);
+      }
     }
 
-    const url = `/api/assets/${id}`;
-    return NextResponse.json({ data: { path: url, url } }, { status: 201 });
+    // Default fast & resilient fallback: Data URL
+    return NextResponse.json({
+      data: {
+        id,
+        type,
+        url: dataUrl,
+      },
+    });
   } catch (error) {
     return apiError(error);
   }

@@ -1,27 +1,45 @@
 import { NextResponse } from "next/server";
-import { requireSameOrigin, apiError } from "@/lib/supabase/http";
-import { createSupabaseServerClient, getSharedAuthEmail } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
-  const originError = requireSameOrigin(request);
-  if (originError) return originError;
-
   try {
-    const body = await request.json() as { password?: unknown };
-    if (typeof body.password !== "string" || body.password.length < 12 || body.password.length > 128) {
-      return NextResponse.json({ error: "Enter the shared password (12 to 128 characters)." }, { status: 400 });
+    const body = (await request.json()) as { password?: unknown };
+    if (typeof body.password !== "string" || !body.password.trim()) {
+      return NextResponse.json(
+        { error: "Please enter the access password." },
+        { status: 400 }
+      );
     }
 
-    const supabase = await createSupabaseServerClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email: getSharedAuthEmail(),
-      password: body.password,
-    });
-    if (error) {
-      return NextResponse.json({ error: "The shared password is incorrect." }, { status: 401 });
+    const trimmed = body.password.trim();
+    const normalized = trimmed.replace(/\s+/g, "");
+
+    // Static password: "19995 67 195" or "1999567195"
+    const isValid =
+      normalized === "1999567195" ||
+      trimmed === "19995 67 195" ||
+      trimmed === "1999567195";
+
+    if (!isValid) {
+      return NextResponse.json(
+        { error: "Incorrect password. Enter the password to access the invoice generator." },
+        { status: 401 }
+      );
     }
-    return NextResponse.json({ data: { signedIn: true } });
+
+    const response = NextResponse.json({ data: { signedIn: true } });
+    response.cookies.set("abira_auth", "authenticated", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+    });
+
+    return response;
   } catch (error) {
-    return apiError(error);
+    return NextResponse.json(
+      { error: "Could not process login request." },
+      { status: 500 }
+    );
   }
 }
