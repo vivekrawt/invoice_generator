@@ -736,10 +736,14 @@ export async function saveRateChart(
     category: String(item.category || "").trim() || "Packaging Tapes",
     product_name: String(item.product_name || "").trim() || "Item",
     specification: item.specification ? String(item.specification).trim() : null,
+    rate: typeof item.rate === "number" ? item.rate : item.rate ? Number(item.rate) : null,
+    unit: item.unit ? String(item.unit).trim() : null,
     rate_per_piece: typeof item.rate_per_piece === "number" ? item.rate_per_piece : item.rate_per_piece ? Number(item.rate_per_piece) : null,
     rate_per_roll: typeof item.rate_per_roll === "number" ? item.rate_per_roll : item.rate_per_roll ? Number(item.rate_per_roll) : null,
     custom_unit: item.custom_unit ? String(item.custom_unit).trim() : null,
     custom_rate: typeof item.custom_rate === "number" ? item.custom_rate : item.custom_rate ? Number(item.custom_rate) : null,
+    secondary_rate: typeof item.secondary_rate === "number" ? item.secondary_rate : item.secondary_rate ? Number(item.secondary_rate) : null,
+    secondary_unit: item.secondary_unit ? String(item.secondary_unit).trim() : null,
   }));
 
   const now = new Date().toISOString();

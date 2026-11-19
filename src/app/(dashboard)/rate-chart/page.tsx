@@ -15,9 +15,9 @@ import {
   Package,
   Layers,
   Search,
-  ExternalLink,
+  Download,
+  Loader2,
   ChevronRight,
-  Sparkles,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,14 +41,34 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { pdf } from "@react-pdf/renderer";
 import { apiRequest, jsonBody } from "@/lib/api-client";
 import { BROCHURE_PRODUCTS, PRODUCT_CATEGORIES } from "@/lib/constants/products-seed";
 import type { Customer, RateChart, RateChartItem, BusinessProfile } from "@/types/database.types";
+import {
+  RateChartPDFDocument,
+  formatRateDisplay,
+} from "@/components/rate-chart/rate-chart-pdf-document";
 
 const DEFAULT_TERMS = `1. Rates are net and exclusive of GST (GST extra as applicable).
 2. Prices are valid for 30 days from the chart issue date.
 3. Standard delivery within 3 business days of confirmed Purchase Order.
 4. Custom branding, printing, and specific mic/width tolerances available on request.`;
+
+const UNIT_OPTIONS = [
+  { value: "Pc", label: "Per Piece (/ Pc)" },
+  { value: "Roll", label: "Per Roll (/ Roll)" },
+  { value: "Pack", label: "Per Pack (/ Pack)" },
+  { value: "Box", label: "Per Box (/ Box)" },
+  { value: "Sheet", label: "Per Sheet (/ Sheet)" },
+  { value: "Ream", label: "Per Ream (/ Ream)" },
+  { value: "Bundle", label: "Per Bundle (/ Bundle)" },
+  { value: "Kg", label: "Per Kg (/ Kg)" },
+  { value: "Meter", label: "Per Meter (/ Meter)" },
+  { value: "Set", label: "Per Set (/ Set)" },
+  { value: "Pair", label: "Per Pair (/ Pair)" },
+  { value: "CUSTOM", label: "Custom Unit..." },
+] as const;
 
 export default function RateChartPage() {
   // Rate chart meta
@@ -68,10 +88,17 @@ export default function RateChartPage() {
   const [isCustomProduct, setIsCustomProduct] = React.useState(false);
   const [customProductName, setCustomProductName] = React.useState("");
   const [specification, setSpecification] = React.useState("");
-  const [ratePerPiece, setRatePerPiece] = React.useState("");
-  const [ratePerRoll, setRatePerRoll] = React.useState("");
-  const [customUnit, setCustomUnit] = React.useState("");
-  const [customRate, setCustomRate] = React.useState("");
+
+  // Rate + Unit Selector
+  const [rateAmount, setRateAmount] = React.useState("");
+  const [rateUnit, setRateUnit] = React.useState<string>("Roll");
+  const [customUnitText, setCustomUnitText] = React.useState("");
+
+  // Optional Secondary Rate (e.g. Piece + Roll)
+  const [showSecondaryRate, setShowSecondaryRate] = React.useState(false);
+  const [secondaryAmount, setSecondaryAmount] = React.useState("");
+  const [secondaryUnit, setSecondaryUnit] = React.useState<string>("Pc");
+  const [secondaryCustomUnitText, setSecondaryCustomUnitText] = React.useState("");
 
   // Customers for quick selection
   const [customers, setCustomers] = React.useState<Customer[]>([]);
@@ -85,6 +112,7 @@ export default function RateChartPage() {
   // Status & feedback
   const [loading, setLoading] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+  const [downloadingPdf, setDownloadingPdf] = React.useState(false);
   const [message, setMessage] = React.useState<{ text: string; type: "success" | "error" } | null>(null);
   const [filterSearch, setFilterSearch] = React.useState("");
 
@@ -148,6 +176,16 @@ export default function RateChartPage() {
     if (firstProduct) {
       setSelectedProduct(firstProduct.product_name);
       setIsCustomProduct(false);
+      // Smart default unit based on category
+      if (category === "PACKAGING TAPES") {
+        setRateUnit("Roll");
+      } else if (category === "COMPREHENSIVE PACKAGING SOLUTIONS") {
+        setRateUnit("Box");
+      } else if (category === "LABELS & STICKERS") {
+        setRateUnit("Sheet");
+      } else {
+        setRateUnit("Pc");
+      }
     } else {
       setIsCustomProduct(true);
       setSelectedProduct("");
@@ -174,16 +212,41 @@ export default function RateChartPage() {
       return;
     }
 
-    const numPiece = ratePerPiece ? parseFloat(ratePerPiece) : null;
-    const numRoll = ratePerRoll ? parseFloat(ratePerRoll) : null;
-    const numCustom = customRate ? parseFloat(customRate) : null;
-
-    if (numPiece === null && numRoll === null && numCustom === null) {
+    const numRate = parseFloat(rateAmount);
+    if (isNaN(numRate) || numRate < 0) {
       setMessage({
-        text: "Please specify at least one rate (Rate per Piece, Rate per Roll, or Custom Rate).",
+        text: "Please enter a valid rate amount (e.g. 37).",
         type: "error",
       });
       return;
+    }
+
+    const finalUnit = rateUnit === "CUSTOM" ? customUnitText.trim() || "Unit" : rateUnit;
+
+    let secRate: number | null = null;
+    let secUnit: string | null = null;
+    if (showSecondaryRate && secondaryAmount) {
+      const numSec = parseFloat(secondaryAmount);
+      if (!isNaN(numSec) && numSec >= 0) {
+        secRate = numSec;
+        secUnit = secondaryUnit === "CUSTOM" ? secondaryCustomUnitText.trim() || "Unit" : secondaryUnit;
+      }
+    }
+
+    // Set legacy fields for backwards compatibility
+    let ratePerPiece: number | null = null;
+    let ratePerRoll: number | null = null;
+    if (finalUnit.toLowerCase() === "pc" || finalUnit.toLowerCase() === "piece") {
+      ratePerPiece = numRate;
+    } else if (finalUnit.toLowerCase() === "roll") {
+      ratePerRoll = numRate;
+    }
+    if (secUnit) {
+      if (secUnit.toLowerCase() === "pc" || secUnit.toLowerCase() === "piece") {
+        ratePerPiece = secRate;
+      } else if (secUnit.toLowerCase() === "roll") {
+        ratePerRoll = secRate;
+      }
     }
 
     const newItem: RateChartItem = {
@@ -191,26 +254,27 @@ export default function RateChartPage() {
       category: selectedCategory,
       product_name: productName,
       specification: specification.trim() || null,
-      rate_per_piece: numPiece && !isNaN(numPiece) ? numPiece : null,
-      rate_per_roll: numRoll && !isNaN(numRoll) ? numRoll : null,
-      custom_unit: customUnit.trim() || null,
-      custom_rate: numCustom && !isNaN(numCustom) ? numCustom : null,
+      rate: numRate,
+      unit: finalUnit,
+      secondary_rate: secRate,
+      secondary_unit: secUnit,
+      rate_per_piece: ratePerPiece,
+      rate_per_roll: ratePerRoll,
     };
 
     setItems((prev) => [...prev, newItem]);
 
     // Reset inputs
     setSpecification("");
-    setRatePerPiece("");
-    setRatePerRoll("");
-    setCustomRate("");
-    setCustomUnit("");
+    setRateAmount("");
+    setSecondaryAmount("");
+    setShowSecondaryRate(false);
     if (isCustomProduct) {
       setCustomProductName("");
       setIsCustomProduct(false);
     }
 
-    setMessage({ text: `Added "${productName}" to rate chart.`, type: "success" });
+    setMessage({ text: `Added "${productName}" (${formatRateDisplay(newItem)}) to rate chart.`, type: "success" });
   };
 
   // Remove item
@@ -320,8 +384,59 @@ export default function RateChartPage() {
     );
   }, [items, filterSearch]);
 
+  // Download PDF file directly named "Abira enterprise rate chart.pdf"
+  const handleDownloadPdf = async () => {
+    if (items.length === 0) {
+      alert("Please add at least one product before downloading the PDF.");
+      return;
+    }
+    try {
+      setDownloadingPdf(true);
+      const activeChart: RateChart = {
+        id: chartId || "draft",
+        organization_name: orgName.trim() || "Client Organization",
+        contact_person: contactPerson.trim() || null,
+        phone: phone.trim() || null,
+        chart_date: chartDate,
+        notes: notes.trim() || null,
+        items,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const doc = <RateChartPDFDocument chart={activeChart} profile={businessProfile} />;
+      const asPdf = pdf(doc);
+      const blob = await asPdf.toBlob();
+      const url = URL.createObjectURL(blob);
+
+      const safeOrg = orgName.trim() ? ` - ${orgName.trim().replace(/[\/\\]/g, "_")}` : "";
+      const filename = `Abira enterprise rate chart${safeOrg}.pdf`;
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (err) {
+      console.error("PDF download error:", err);
+      alert("Could not generate PDF. Please try again.");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  // Print with document.title set to "Abira enterprise rate chart"
   const handlePrint = () => {
+    const prevTitle = document.title;
+    const safeOrg = orgName.trim() ? ` - ${orgName.trim()}` : "";
+    document.title = `Abira enterprise rate chart${safeOrg}`;
     window.print();
+    setTimeout(() => {
+      document.title = prevTitle;
+    }, 1500);
   };
 
   return (
@@ -365,7 +480,7 @@ export default function RateChartPage() {
             </Badge>
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            Create, manage, and print organization-specific product rate charts with custom Piece &amp; Roll rates.
+            Create, manage, and download organization-specific product rate charts with custom unit rates (Roll, Piece, Pack, Box, Sheet, etc.).
           </p>
         </div>
 
@@ -396,12 +511,29 @@ export default function RateChartPage() {
             type="button"
             variant="outline"
             size="sm"
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf || items.length === 0}
+            className="text-xs gap-1.5 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+            title="Download PDF as 'Abira enterprise rate chart.pdf'"
+          >
+            {downloadingPdf ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            Download PDF
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
             onClick={() => setPrintModalOpen(true)}
             disabled={items.length === 0}
             className="text-xs gap-1.5 text-blue-700 border-blue-200 hover:bg-blue-50"
           >
             <Printer className="h-3.5 w-3.5" />
-            Print / Export Sheet
+            Print / Preview Sheet
           </Button>
 
           <Button
@@ -561,7 +693,7 @@ export default function RateChartPage() {
               Add Product to Rate Chart
             </CardTitle>
             <CardDescription className="text-xs">
-              Select category, product (e.g. Transparent Tapes), and enter Rate Per Piece (₹) and Rate Per Roll (₹).
+              Select product (e.g. Transparent Tape, A4 Sheet), enter rate amount, and select unit from dropdown.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
@@ -631,7 +763,7 @@ export default function RateChartPage() {
                     Size / Specification (Optional)
                   </Label>
                   <Input
-                    placeholder="e.g. 48mm x 65m, 40 Micron"
+                    placeholder="e.g. 48mm x 65m, 40 Micron or 75 GSM"
                     value={specification}
                     onChange={(e) => setSpecification(e.target.value)}
                     className="mt-1 h-9 text-sm"
@@ -639,15 +771,28 @@ export default function RateChartPage() {
                 </div>
               </div>
 
-              {/* Rate Inputs */}
+              {/* Primary Rate & Unit Dropdown */}
               <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200/80 space-y-3">
-                <div className="text-xs font-semibold text-slate-700">
-                  Pricing (Enter one or both according to product unit)
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-semibold text-slate-700">
+                    Product Rate &amp; Unit Basis
+                  </div>
+                  {!showSecondaryRate && (
+                    <button
+                      type="button"
+                      onClick={() => setShowSecondaryRate(true)}
+                      className="text-[11px] text-blue-600 hover:underline font-medium"
+                    >
+                      + Add secondary rate (optional)
+                    </button>
+                  )}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                  {/* Amount */}
+                  <div className="sm:col-span-6">
                     <Label className="text-xs font-medium text-slate-700">
-                      Rate per Piece (₹/Pc)
+                      Amount / Rate (₹) <span className="text-red-500">*</span>
                     </Label>
                     <div className="relative mt-1">
                       <span className="absolute left-3 top-2 text-xs font-medium text-slate-400">₹</span>
@@ -655,55 +800,111 @@ export default function RateChartPage() {
                         type="number"
                         step="0.01"
                         min="0"
-                        placeholder="0.00"
-                        value={ratePerPiece}
-                        onChange={(e) => setRatePerPiece(e.target.value)}
+                        placeholder="e.g. 37.00"
+                        value={rateAmount}
+                        onChange={(e) => setRateAmount(e.target.value)}
                         className="h-9 pl-7 text-sm font-semibold text-slate-900"
                       />
                     </div>
                   </div>
 
-                  <div>
+                  {/* Unit Dropdown */}
+                  <div className={rateUnit === "CUSTOM" ? "sm:col-span-3" : "sm:col-span-6"}>
                     <Label className="text-xs font-medium text-slate-700">
-                      Rate per Roll (₹/Roll)
+                      Rate Unit (Dropdown)
                     </Label>
-                    <div className="relative mt-1">
-                      <span className="absolute left-3 top-2 text-xs font-medium text-slate-400">₹</span>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="0.00"
-                        value={ratePerRoll}
-                        onChange={(e) => setRatePerRoll(e.target.value)}
-                        className="h-9 pl-7 text-sm font-semibold text-slate-900"
-                      />
-                    </div>
+                    <select
+                      className="mt-1 w-full h-9 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none"
+                      value={rateUnit}
+                      onChange={(e) => setRateUnit(e.target.value)}
+                    >
+                      {UNIT_OPTIONS.map((u) => (
+                        <option key={u.value} value={u.value}>
+                          {u.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
-                  <div>
-                    <Label className="text-xs font-medium text-slate-700">
-                      Custom Unit &amp; Rate
-                    </Label>
-                    <div className="grid grid-cols-2 gap-1.5 mt-1">
+                  {/* Custom Unit Input if selected */}
+                  {rateUnit === "CUSTOM" && (
+                    <div className="sm:col-span-3">
+                      <Label className="text-xs font-medium text-slate-700">Custom Unit</Label>
                       <Input
-                        placeholder="Unit (Kg/Box)"
-                        value={customUnit}
-                        onChange={(e) => setCustomUnit(e.target.value)}
-                        className="h-9 text-xs"
-                      />
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="₹ Rate"
-                        value={customRate}
-                        onChange={(e) => setCustomRate(e.target.value)}
-                        className="h-9 text-xs"
+                        placeholder="e.g. Pkt of 6"
+                        value={customUnitText}
+                        onChange={(e) => setCustomUnitText(e.target.value)}
+                        className="mt-1 h-9 text-xs"
                       />
                     </div>
-                  </div>
+                  )}
                 </div>
+
+                {/* Secondary Rate (Optional) */}
+                {showSecondaryRate && (
+                  <div className="pt-2 border-t border-slate-200 mt-2">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] font-semibold text-slate-600">
+                        Secondary Rate (Optional, e.g. Pack / Carton rate):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSecondaryRate(false);
+                          setSecondaryAmount("");
+                        }}
+                        className="text-[11px] text-red-600 hover:underline"
+                      >
+                        Remove secondary rate
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                      <div className="sm:col-span-6">
+                        <Label className="text-xs font-medium text-slate-700">Amount (₹)</Label>
+                        <div className="relative mt-1">
+                          <span className="absolute left-3 top-2 text-xs font-medium text-slate-400">₹</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="e.g. 210.00"
+                            value={secondaryAmount}
+                            onChange={(e) => setSecondaryAmount(e.target.value)}
+                            className="h-9 pl-7 text-sm font-semibold text-slate-900"
+                          />
+                        </div>
+                      </div>
+
+                      <div className={secondaryUnit === "CUSTOM" ? "sm:col-span-3" : "sm:col-span-6"}>
+                        <Label className="text-xs font-medium text-slate-700">Unit</Label>
+                        <select
+                          className="mt-1 w-full h-9 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none"
+                          value={secondaryUnit}
+                          onChange={(e) => setSecondaryUnit(e.target.value)}
+                        >
+                          {UNIT_OPTIONS.map((u) => (
+                            <option key={u.value} value={u.value}>
+                              {u.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {secondaryUnit === "CUSTOM" && (
+                        <div className="sm:col-span-3">
+                          <Label className="text-xs font-medium text-slate-700">Custom Unit</Label>
+                          <Input
+                            placeholder="e.g. Box"
+                            value={secondaryCustomUnitText}
+                            onChange={(e) => setSecondaryCustomUnitText(e.target.value)}
+                            className="mt-1 h-9 text-xs"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Add button */}
@@ -763,8 +964,7 @@ export default function RateChartPage() {
               <TableProperties className="h-10 w-10 text-slate-300 mx-auto mb-3" />
               <p className="text-sm font-medium text-slate-700">No items added to this rate chart yet</p>
               <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                Select a category above (e.g. Packaging Tapes), pick a product like Transparent Tapes,
-                fill the rates, and click &ldquo;Add to Rate Chart&rdquo;.
+                Select a category above, pick a product (e.g. Transparent Tape or A4 Sheet), enter the rate, select the unit dropdown (e.g. Roll or Piece), and click &ldquo;Add to Rate Chart&rdquo;.
               </p>
             </div>
           ) : (
@@ -775,9 +975,7 @@ export default function RateChartPage() {
                   <TableHead>Product Name</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Specification</TableHead>
-                  <TableHead className="text-right">Rate / Pc (₹)</TableHead>
-                  <TableHead className="text-right">Rate / Roll (₹)</TableHead>
-                  <TableHead className="text-right">Custom Unit / Rate</TableHead>
+                  <TableHead className="text-right">Rate / Unit</TableHead>
                   <TableHead className="w-16 text-center">Action</TableHead>
                 </TableRow>
               </TableHeader>
@@ -799,32 +997,9 @@ export default function RateChartPage() {
                       {item.specification || "—"}
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      {item.rate_per_piece !== null && item.rate_per_piece !== undefined ? (
-                        <span className="text-emerald-700 font-semibold">
-                          ₹{Number(item.rate_per_piece).toFixed(2)}
-                        </span>
-                      ) : (
-                        <span className="text-slate-300">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {item.rate_per_roll !== null && item.rate_per_roll !== undefined ? (
-                        <span className="text-blue-700 font-semibold">
-                          ₹{Number(item.rate_per_roll).toFixed(2)}
-                        </span>
-                      ) : (
-                        <span className="text-slate-300">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {item.custom_rate !== null && item.custom_rate !== undefined ? (
-                        <span className="text-purple-700">
-                          ₹{Number(item.custom_rate).toFixed(2)}
-                          {item.custom_unit ? ` / ${item.custom_unit}` : ""}
-                        </span>
-                      ) : (
-                        <span className="text-slate-300">—</span>
-                      )}
+                      <span className="text-blue-900 font-bold bg-blue-50 px-2.5 py-1 rounded border border-blue-200">
+                        {formatRateDisplay(item)}
+                      </span>
                     </TableCell>
                     <TableCell className="text-center">
                       <Button
@@ -921,15 +1096,28 @@ export default function RateChartPage() {
           <DialogHeader className="no-print">
             <DialogTitle className="flex items-center justify-between">
               <span>Rate Sheet Preview</span>
-              <Button
-                type="button"
-                size="sm"
-                onClick={handlePrint}
-                className="bg-[#0b1f3a] text-white text-xs gap-1.5"
-              >
-                <Printer className="h-3.5 w-3.5" />
-                Print Rate Sheet (A4)
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleDownloadPdf}
+                  disabled={downloadingPdf}
+                  className="text-xs gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                >
+                  {downloadingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                  Download PDF
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handlePrint}
+                  className="bg-[#0b1f3a] text-white text-xs gap-1.5"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  Print Rate Sheet (A4)
+                </Button>
+              </div>
             </DialogTitle>
           </DialogHeader>
 
@@ -991,9 +1179,7 @@ export default function RateChartPage() {
                     <th className="p-2">Product Name</th>
                     <th className="p-2">Category</th>
                     <th className="p-2">Specification</th>
-                    <th className="p-2 text-right">Rate / Pc</th>
-                    <th className="p-2 text-right">Rate / Roll</th>
-                    <th className="p-2 text-right">Other Unit</th>
+                    <th className="p-2 text-right">Rate / Unit</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -1003,20 +1189,8 @@ export default function RateChartPage() {
                       <td className="p-2 font-semibold text-slate-800">{it.product_name}</td>
                       <td className="p-2 text-slate-600">{it.category}</td>
                       <td className="p-2 text-slate-600">{it.specification || "Standard"}</td>
-                      <td className="p-2 text-right font-medium text-emerald-800">
-                        {it.rate_per_piece !== null && it.rate_per_piece !== undefined
-                          ? `₹${Number(it.rate_per_piece).toFixed(2)}`
-                          : "—"}
-                      </td>
-                      <td className="p-2 text-right font-medium text-blue-800">
-                        {it.rate_per_roll !== null && it.rate_per_roll !== undefined
-                          ? `₹${Number(it.rate_per_roll).toFixed(2)}`
-                          : "—"}
-                      </td>
-                      <td className="p-2 text-right text-slate-700">
-                        {it.custom_rate !== null && it.custom_rate !== undefined
-                          ? `₹${Number(it.custom_rate).toFixed(2)}${it.custom_unit ? ` / ${it.custom_unit}` : ""}`
-                          : "—"}
+                      <td className="p-2 text-right font-bold text-blue-900">
+                        {formatRateDisplay(it)}
                       </td>
                     </tr>
                   ))}

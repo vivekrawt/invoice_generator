@@ -142,10 +142,14 @@ export interface RateChartItem {
   category: string;
   product_name: string;
   specification?: string | null;
+  rate?: number | null;
+  unit?: string | null;
   rate_per_piece?: number | null;
   rate_per_roll?: number | null;
   custom_unit?: string | null;
   custom_rate?: number | null;
+  secondary_rate?: number | null;
+  secondary_unit?: string | null;
 }
 
 export interface RateChart {
