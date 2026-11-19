@@ -76,8 +76,9 @@ export async function POST(request: Request) {
             data: {
               id,
               type,
-              url: `/api/assets/${id}`,
-              path: `/api/assets/${id}`,
+              url: dataUrl,
+              path: dataUrl,
+              objectPath: `/api/assets/${id}`,
             },
           });
         }

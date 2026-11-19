@@ -383,15 +383,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   sigImageContainer: {
-    height: 52,
+    height: 56,
     width: 140,
     position: "relative",
-    justifyContent: "center",
-    alignItems: "center",
     marginBottom: 2,
   },
   stampImage: {
     position: "absolute",
+    left: 10,
+    top: 2,
     width: 52,
     height: 52,
     objectFit: "contain",
@@ -399,6 +399,8 @@ const styles = StyleSheet.create({
   },
   signatureImage: {
     position: "absolute",
+    left: 28,
+    top: 10,
     width: 95,
     height: 38,
     objectFit: "contain",
@@ -432,11 +434,28 @@ const styles = StyleSheet.create({
   },
 });
 
+function resolvePdfImageUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("data:") || trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}${trimmed.startsWith("/") ? "" : "/"}${trimmed}`;
+  }
+  return trimmed;
+}
+
 export function InvoicePDFDocument({ invoice }: { invoice: Invoice }) {
   const b = invoice.business_snapshot;
   const c = invoice.customer_snapshot;
   const s = invoice.shipping_snapshot;
   const items = invoice.items || [];
+
+  const qrUrl = resolvePdfImageUrl(b.payment_qr_url);
+  const stampUrl = resolvePdfImageUrl(b.stamp_url);
+  const signatureUrl = resolvePdfImageUrl(b.signature_url);
 
   // Bank fields existence check
   const hasBankDetails =
@@ -642,13 +661,13 @@ export function InvoicePDFDocument({ invoice }: { invoice: Invoice }) {
             </View>
 
             {/* Payment QR */}
-            {b.payment_qr_url && (
+            {qrUrl && (
               <View style={styles.qrColumn}>
                 <Text style={[styles.sectionHeading, { textAlign: "center" }]}>
                   Scan to Pay (UPI)
                 </Text>
                 {/* eslint-disable-next-line jsx-a11y/alt-text */}
-                <Image src={b.payment_qr_url} style={styles.qrImage} />
+                <Image src={qrUrl} style={styles.qrImage} />
                 <Text style={styles.qrCaption}>Instant QR Settlement</Text>
               </View>
             )}
@@ -679,15 +698,15 @@ export function InvoicePDFDocument({ invoice }: { invoice: Invoice }) {
             <Text style={styles.sigEntity}>For ABIRA Enterprises</Text>
 
             <View style={styles.sigArea}>
-              {b.stamp_url || b.signature_url ? (
+              {stampUrl || signatureUrl ? (
                 <View style={styles.sigImageContainer}>
-                  {b.stamp_url && (
+                  {stampUrl && (
                     /* eslint-disable-next-line jsx-a11y/alt-text */
-                    <Image src={b.stamp_url} style={styles.stampImage} />
+                    <Image src={stampUrl} style={styles.stampImage} />
                   )}
-                  {b.signature_url && (
+                  {signatureUrl && (
                     /* eslint-disable-next-line jsx-a11y/alt-text */
-                    <Image src={b.signature_url} style={styles.signatureImage} />
+                    <Image src={signatureUrl} style={styles.signatureImage} />
                   )}
                 </View>
               ) : (
@@ -696,7 +715,7 @@ export function InvoicePDFDocument({ invoice }: { invoice: Invoice }) {
 
               <View style={styles.sigLine} />
               <Text style={styles.sigLabel}>Authorized Signatory</Text>
-              {!b.signature_url && (
+              {!signatureUrl && (
                 <>
                   <Text style={styles.sigDetails}>Name: __________________________</Text>
                   <Text style={styles.sigDetails}>Date: __________________________</Text>

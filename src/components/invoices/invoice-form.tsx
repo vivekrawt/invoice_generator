@@ -263,40 +263,49 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
         }
 
         // Read cached business profile if present
+        let localCachedProfile: BusinessProfile | null = null;
         try {
           const cached = typeof window !== "undefined" ? localStorage.getItem("abira_business_profile") : null;
           if (cached) {
-            const parsed = JSON.parse(cached) as BusinessProfile;
-            setBusinessProfile(parsed);
-            if (parsed.default_terms) setTerms(parsed.default_terms);
-            if (parsed.bank_account_name) setBankAccountName(parsed.bank_account_name);
-            if (parsed.bank_name) setBankName(parsed.bank_name);
-            if (parsed.account_number) setAccountNumber(parsed.account_number);
-            if (parsed.ifsc) setIfsc(parsed.ifsc);
-            if (parsed.upi_id) setUpiId(parsed.upi_id);
-            if (parsed.payment_qr_url) setPaymentQrUrl(parsed.payment_qr_url);
-            if (parsed.stamp_url) setStampUrl(parsed.stamp_url);
-            if (parsed.signature_url) setSignatureUrl(parsed.signature_url);
+            localCachedProfile = JSON.parse(cached) as BusinessProfile;
+            setBusinessProfile(localCachedProfile);
+            if (localCachedProfile.default_terms) setTerms(localCachedProfile.default_terms);
+            if (localCachedProfile.bank_account_name) setBankAccountName(localCachedProfile.bank_account_name);
+            if (localCachedProfile.bank_name) setBankName(localCachedProfile.bank_name);
+            if (localCachedProfile.account_number) setAccountNumber(localCachedProfile.account_number);
+            if (localCachedProfile.ifsc) setIfsc(localCachedProfile.ifsc);
+            if (localCachedProfile.upi_id) setUpiId(localCachedProfile.upi_id);
+            if (localCachedProfile.payment_qr_url) setPaymentQrUrl(localCachedProfile.payment_qr_url);
+            if (localCachedProfile.stamp_url) setStampUrl(localCachedProfile.stamp_url);
+            if (localCachedProfile.signature_url) setSignatureUrl(localCachedProfile.signature_url);
           }
         } catch {}
 
         const businessProfileData = await apiRequest<BusinessProfile>("/api/data/business-profile");
         if (active) {
-          setBusinessProfile(businessProfileData);
-          if (businessProfileData.default_terms) {
-            setTerms(businessProfileData.default_terms);
+          const mergedProfile: BusinessProfile = {
+            ...(localCachedProfile || {} as BusinessProfile),
+            ...businessProfileData,
+            stamp_url: businessProfileData.stamp_url || localCachedProfile?.stamp_url || null,
+            signature_url: businessProfileData.signature_url || localCachedProfile?.signature_url || null,
+            payment_qr_url: businessProfileData.payment_qr_url || localCachedProfile?.payment_qr_url || null,
+            logo_url: businessProfileData.logo_url || localCachedProfile?.logo_url || null,
+          };
+          setBusinessProfile(mergedProfile);
+          if (mergedProfile.default_terms) {
+            setTerms(mergedProfile.default_terms);
           }
-          if (businessProfileData.bank_account_name) setBankAccountName(businessProfileData.bank_account_name);
-          if (businessProfileData.bank_name) setBankName(businessProfileData.bank_name);
-          if (businessProfileData.account_number) setAccountNumber(businessProfileData.account_number);
-          if (businessProfileData.ifsc) setIfsc(businessProfileData.ifsc);
-          if (businessProfileData.upi_id) setUpiId(businessProfileData.upi_id);
-          if (businessProfileData.payment_qr_url) setPaymentQrUrl(businessProfileData.payment_qr_url);
-          if (businessProfileData.stamp_url) setStampUrl(businessProfileData.stamp_url);
-          if (businessProfileData.signature_url) setSignatureUrl(businessProfileData.signature_url);
+          if (mergedProfile.bank_account_name) setBankAccountName(mergedProfile.bank_account_name);
+          if (mergedProfile.bank_name) setBankName(mergedProfile.bank_name);
+          if (mergedProfile.account_number) setAccountNumber(mergedProfile.account_number);
+          if (mergedProfile.ifsc) setIfsc(mergedProfile.ifsc);
+          if (mergedProfile.upi_id) setUpiId(mergedProfile.upi_id);
+          if (mergedProfile.payment_qr_url) setPaymentQrUrl(mergedProfile.payment_qr_url);
+          if (mergedProfile.stamp_url) setStampUrl(mergedProfile.stamp_url);
+          if (mergedProfile.signature_url) setSignatureUrl(mergedProfile.signature_url);
 
           try {
-            localStorage.setItem("abira_business_profile", JSON.stringify(businessProfileData));
+            localStorage.setItem("abira_business_profile", JSON.stringify(mergedProfile));
           } catch {}
         }
       } catch (err) {
@@ -503,9 +512,9 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
         ifsc: ifsc.trim().toUpperCase() || null,
         upi_id: upiId.trim() || null,
         logo_url: businessProfile?.logo_url || null,
-        payment_qr_url: paymentQrUrl || null,
-        stamp_url: stampUrl || null,
-        signature_url: signatureUrl || null,
+        payment_qr_url: paymentQrUrl || businessProfile?.payment_qr_url || null,
+        stamp_url: stampUrl || businessProfile?.stamp_url || null,
+        signature_url: signatureUrl || businessProfile?.signature_url || null,
       };
 
       const finalShippingSnapshot = shipToDifferent ? shippingAddress : null;

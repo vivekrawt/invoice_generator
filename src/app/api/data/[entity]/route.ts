@@ -6,10 +6,12 @@ import {
   listCustomers,
   listInvoices,
   listProducts,
+  listRateCharts,
   saveBusinessProfile,
   saveCustomer,
   saveInvoice,
   saveProduct,
+  saveRateChart,
   syncBrochureProducts,
 } from "@/lib/supabase/store";
 
@@ -32,6 +34,8 @@ export async function GET(_request: Request, { params }: RouteContext) {
         return NextResponse.json({ data: await listProducts(auth.context) });
       case "invoices":
         return NextResponse.json({ data: await listInvoices(auth.context) });
+      case "rate-charts":
+        return NextResponse.json({ data: await listRateCharts(auth.context) });
       default:
         return NextResponse.json({ error: "Unknown data resource." }, { status: 404 });
     }
@@ -62,6 +66,8 @@ export async function POST(request: Request, { params }: RouteContext) {
         return NextResponse.json({
           data: await saveInvoice(auth.context, body.invoice, body.items),
         }, { status: 201 });
+      case "rate-charts":
+        return NextResponse.json({ data: await saveRateChart(auth.context, body) }, { status: 201 });
       default:
         return NextResponse.json({ error: "This data resource cannot be created." }, { status: 405 });
     }

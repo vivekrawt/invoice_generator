@@ -34,7 +34,27 @@ export function InvoicePDFActions({
       throw new Error("Invoice snapshot or line-item data is missing. Reload the saved invoice and try again.");
     }
 
-    const doc = <InvoicePDFDocument invoice={invoice} />;
+    let enrichedInvoice = invoice;
+    try {
+      const cached = typeof window !== "undefined" ? localStorage.getItem("abira_business_profile") : null;
+      if (cached) {
+        const bp = JSON.parse(cached) as Partial<any>;
+        if (bp) {
+          enrichedInvoice = {
+            ...enrichedInvoice,
+            business_snapshot: {
+              ...enrichedInvoice.business_snapshot,
+              stamp_url: enrichedInvoice.business_snapshot.stamp_url || bp.stamp_url || null,
+              signature_url: enrichedInvoice.business_snapshot.signature_url || bp.signature_url || null,
+              payment_qr_url: enrichedInvoice.business_snapshot.payment_qr_url || bp.payment_qr_url || null,
+              logo_url: enrichedInvoice.business_snapshot.logo_url || bp.logo_url || null,
+            },
+          };
+        }
+      }
+    } catch {}
+
+    const doc = <InvoicePDFDocument invoice={enrichedInvoice} />;
     const asPdf = pdf(doc);
     return await asPdf.toBlob();
   };

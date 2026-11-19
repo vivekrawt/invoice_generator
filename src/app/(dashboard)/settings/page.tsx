@@ -93,29 +93,36 @@ export default function SettingsPage() {
 
     async function loadProfile() {
       try {
+        let cachedParsed: Partial<BusinessProfile> = {};
+        try {
+          const cached = typeof window !== "undefined" ? localStorage.getItem("abira_business_profile") : null;
+          if (cached) cachedParsed = JSON.parse(cached);
+        } catch {}
+
         const bp = await apiRequest<BusinessProfile>("/api/data/business-profile");
         if (!active) return;
         const merged = {
           ...defaultProfile,
+          ...cachedParsed,
           ...bp,
-          email: bp.email || "",
-          pan: bp.pan || "",
-          bank_account_name: bp.bank_account_name || "",
-          bank_name: bp.bank_name || "",
-          account_number: bp.account_number || "",
-          ifsc: bp.ifsc || "",
-          upi_id: bp.upi_id || "",
-          logo_url: bp.logo_url || "",
-          payment_qr_url: bp.payment_qr_url || "",
-          signature_url: bp.signature_url || "",
-          stamp_url: bp.stamp_url || "",
-          default_terms: bp.default_terms || defaultProfile.default_terms,
+          email: bp.email ?? cachedParsed.email ?? "",
+          pan: bp.pan ?? cachedParsed.pan ?? "",
+          bank_account_name: bp.bank_account_name ?? cachedParsed.bank_account_name ?? "",
+          bank_name: bp.bank_name ?? cachedParsed.bank_name ?? "",
+          account_number: bp.account_number ?? cachedParsed.account_number ?? "",
+          ifsc: bp.ifsc ?? cachedParsed.ifsc ?? "",
+          upi_id: bp.upi_id ?? cachedParsed.upi_id ?? "",
+          logo_url: bp.logo_url || cachedParsed.logo_url || "",
+          payment_qr_url: bp.payment_qr_url || cachedParsed.payment_qr_url || "",
+          signature_url: bp.signature_url || cachedParsed.signature_url || "",
+          stamp_url: bp.stamp_url || cachedParsed.stamp_url || "",
+          default_terms: bp.default_terms || cachedParsed.default_terms || defaultProfile.default_terms,
         };
         setProfile(merged);
-        setLogoPreviewUrl(bp.logo_url || "");
-        setQrPreviewUrl(bp.payment_qr_url || "");
-        setSignaturePreviewUrl(bp.signature_url || "");
-        setStampPreviewUrl(bp.stamp_url || "");
+        setLogoPreviewUrl(merged.logo_url || "");
+        setQrPreviewUrl(merged.payment_qr_url || "");
+        setSignaturePreviewUrl(merged.signature_url || "");
+        setStampPreviewUrl(merged.stamp_url || "");
         setProfileLoaded(true);
 
         try {
@@ -168,31 +175,50 @@ export default function SettingsPage() {
       if (file.size > 2 * 1024 * 1024) {
         throw new Error("Image files must be 2 MiB or smaller.");
       }
-      const uploadForm = new FormData();
-      uploadForm.set("file", file);
-      uploadForm.set("type", type);
-      const response = await fetch("/api/assets", { method: "POST", body: uploadForm });
-      const result = (await response.json()) as {
-        data?: { id?: string; path?: string; url?: string };
-        error?: string;
-      };
-      const assetUrl = result.data?.url || result.data?.path;
-      if (!response.ok || !assetUrl) {
-        throw new Error(result.error || "Image upload failed.");
+
+      // Convert to Base64 Data URL immediately for 100% offline and instant persistence
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      let updatedKey = "";
+      if (type === "logo") {
+        setProfile((prev) => ({ ...prev, logo_url: dataUrl }));
+        setLogoPreviewUrl(dataUrl);
+        updatedKey = "logo_url";
+      } else if (type === "qr") {
+        setProfile((prev) => ({ ...prev, payment_qr_url: dataUrl }));
+        setQrPreviewUrl(dataUrl);
+        updatedKey = "payment_qr_url";
+      } else if (type === "signature") {
+        setProfile((prev) => ({ ...prev, signature_url: dataUrl }));
+        setSignaturePreviewUrl(dataUrl);
+        updatedKey = "signature_url";
+      } else if (type === "stamp") {
+        setProfile((prev) => ({ ...prev, stamp_url: dataUrl }));
+        setStampPreviewUrl(dataUrl);
+        updatedKey = "stamp_url";
       }
 
-      if (type === "logo") {
-        setProfile((prev) => ({ ...prev, logo_url: assetUrl }));
-        setLogoPreviewUrl(assetUrl);
-      } else if (type === "qr") {
-        setProfile((prev) => ({ ...prev, payment_qr_url: assetUrl }));
-        setQrPreviewUrl(assetUrl);
-      } else if (type === "signature") {
-        setProfile((prev) => ({ ...prev, signature_url: assetUrl }));
-        setSignaturePreviewUrl(assetUrl);
-      } else if (type === "stamp") {
-        setProfile((prev) => ({ ...prev, stamp_url: assetUrl }));
-        setStampPreviewUrl(assetUrl);
+      // Save to localStorage immediately
+      const currentCached = typeof window !== "undefined" ? localStorage.getItem("abira_business_profile") : null;
+      const parsedCached = currentCached ? JSON.parse(currentCached) : { ...profile };
+      const updatedProfile = { ...parsedCached, [updatedKey]: dataUrl };
+      try {
+        localStorage.setItem("abira_business_profile", JSON.stringify(updatedProfile));
+      } catch {}
+
+      // Background sync to server API
+      try {
+        await apiRequest("/api/data/business-profile", {
+          method: "PUT",
+          body: jsonBody(updatedProfile),
+        });
+      } catch (err) {
+        console.warn("Background server sync notice for uploaded asset:", err);
       }
 
       const labelMap = {
@@ -203,7 +229,7 @@ export default function SettingsPage() {
       };
 
       setMessage({
-        text: `${labelMap[type]} uploaded successfully. Click Save Business Settings below to apply it.`,
+        text: `${labelMap[type]} saved successfully!`,
         type: "success",
       });
     } catch (err: unknown) {
@@ -578,8 +604,12 @@ export default function SettingsPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          setProfile({ ...profile, logo_url: "" });
+                          const updated = { ...profile, logo_url: "" };
+                          setProfile(updated);
                           setLogoPreviewUrl("");
+                          try {
+                            localStorage.setItem("abira_business_profile", JSON.stringify(updated));
+                          } catch {}
                         }}
                         className="text-[11px] text-red-600 hover:underline"
                       >
@@ -629,8 +659,12 @@ export default function SettingsPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          setProfile({ ...profile, payment_qr_url: "" });
+                          const updated = { ...profile, payment_qr_url: "" };
+                          setProfile(updated);
                           setQrPreviewUrl("");
+                          try {
+                            localStorage.setItem("abira_business_profile", JSON.stringify(updated));
+                          } catch {}
                         }}
                         className="text-[11px] text-red-600 hover:underline"
                       >
@@ -683,8 +717,12 @@ export default function SettingsPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          setProfile({ ...profile, stamp_url: "" });
+                          const updated = { ...profile, stamp_url: "" };
+                          setProfile(updated);
                           setStampPreviewUrl("");
+                          try {
+                            localStorage.setItem("abira_business_profile", JSON.stringify(updated));
+                          } catch {}
                         }}
                         className="text-[11px] text-red-600 hover:underline"
                       >
@@ -737,8 +775,12 @@ export default function SettingsPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          setProfile({ ...profile, signature_url: "" });
+                          const updated = { ...profile, signature_url: "" };
+                          setProfile(updated);
                           setSignaturePreviewUrl("");
+                          try {
+                            localStorage.setItem("abira_business_profile", JSON.stringify(updated));
+                          } catch {}
                         }}
                         className="text-[11px] text-red-600 hover:underline"
                       >

@@ -136,3 +136,26 @@ export interface Invoice {
   // Items relation when queried with join
   items?: InvoiceItem[];
 }
+
+export interface RateChartItem {
+  id: string;
+  category: string;
+  product_name: string;
+  specification?: string | null;
+  rate_per_piece?: number | null;
+  rate_per_roll?: number | null;
+  custom_unit?: string | null;
+  custom_rate?: number | null;
+}
+
+export interface RateChart {
+  id: string;
+  organization_name: string;
+  contact_person?: string | null;
+  phone?: string | null;
+  chart_date: string;
+  notes?: string | null;
+  items: RateChartItem[];
+  created_at: string;
+  updated_at: string;
+}

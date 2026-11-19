@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   FilePlus,
   Files,
+  TableProperties,
   Users,
   Package,
   Settings,
@@ -39,6 +40,11 @@ const navItems: NavItem[] = [
     title: "All Invoices",
     href: "/invoices",
     icon: Files,
+  },
+  {
+    title: "Rate Chart",
+    href: "/rate-chart",
+    icon: TableProperties,
   },
   {
     title: "Customers",

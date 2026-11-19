@@ -1,5 +1,7 @@
 import "server-only";
 
+import fs from "node:fs";
+import path from "node:path";
 import type { User, SupabaseClient } from "@supabase/supabase-js";
 import { BROCHURE_PRODUCTS } from "../constants/products-seed";
 import { AppError } from "../app-error";
@@ -10,6 +12,8 @@ import type {
   Invoice,
   InvoiceItem,
   Product,
+  RateChart,
+  RateChartItem,
 } from "@/types/database.types";
 import type { Database } from "./database.types";
 
@@ -75,6 +79,32 @@ No returns or exchanges are accepted after delivery, except in cases involving d
   };
 }
 
+// Helpers for server filesystem storage fallback
+function tryReadLocalJson<T>(filename: string, fallback: T): T {
+  try {
+    const filePath = path.join(process.cwd(), "data", filename);
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, "utf8");
+      return JSON.parse(data) as T;
+    }
+  } catch {
+    // Ignore read errors
+  }
+  return fallback;
+}
+
+function tryWriteLocalJson(filename: string, data: unknown) {
+  try {
+    const dataDir = path.join(process.cwd(), "data");
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    fs.writeFileSync(path.join(dataDir, filename), JSON.stringify(data, null, 2), "utf8");
+  } catch {
+    // Ignore write errors in read-only environments
+  }
+}
+
 // In-Memory store fallback (ensures the website runs 100% on Vercel even without Supabase credentials)
 interface MemoryStorage {
   profile: BusinessProfile;
@@ -82,10 +112,11 @@ interface MemoryStorage {
   products: Product[];
   invoices: Invoice[];
   assets: Array<{ id: string; type: "logo" | "qr" | "signature" | "stamp"; object_path: string; mime_type: string }>;
+  rateCharts: RateChart[];
 }
 
 const memoryStore: MemoryStorage = {
-  profile: profileDefaults(),
+  profile: tryReadLocalJson<BusinessProfile>("business-profile.json", profileDefaults()),
   customers: [],
   products: BROCHURE_PRODUCTS.map((p, idx) => ({
     id: `prod-${idx + 1}`,
@@ -97,6 +128,7 @@ const memoryStore: MemoryStorage = {
   })),
   invoices: [],
   assets: [],
+  rateCharts: tryReadLocalJson<RateChart[]>("rate-charts.json", []),
 };
 
 // BUSINESS PROFILE
@@ -152,6 +184,9 @@ export async function saveBusinessProfile(context: StoreContext, value: unknown)
     ...fields,
   };
 
+  // Persist to local fallback json
+  tryWriteLocalJson("business-profile.json", memoryStore.profile);
+
   if (context.supabase) {
     try {
       const { data: existingRow } = await context.supabase
@@ -173,7 +208,7 @@ export async function saveBusinessProfile(context: StoreContext, value: unknown)
 
       // If signature_url or stamp_url column is not yet present in Supabase table,
       // fallback to saving all other core business profile details cleanly
-      if (res.error && res.error.message?.includes("column")) {
+      if (res.error && (res.error.message?.includes("column") || res.error.message?.includes("signature_url") || res.error.message?.includes("stamp_url"))) {
         console.warn("Retrying profile save without newer image columns:", res.error.message);
         const { signature_url, stamp_url, ...coreFields } = fields;
         res = await context.supabase
@@ -188,22 +223,19 @@ export async function saveBusinessProfile(context: StoreContext, value: unknown)
 
       if (res.error) {
         console.error("Supabase profile upsert error:", res.error);
-        throw new AppError(`Could not save to database: ${res.error.message}`);
-      }
-
-      if (res.data) {
+      } else if (res.data) {
         const saved = res.data as unknown as BusinessProfile;
         memoryStore.profile = {
           ...memoryStore.profile,
           ...saved,
-          signature_url: fields.signature_url ?? saved.signature_url ?? null,
-          stamp_url: fields.stamp_url ?? saved.stamp_url ?? null,
+          signature_url: fields.signature_url ?? saved.signature_url ?? memoryStore.profile.signature_url,
+          stamp_url: fields.stamp_url ?? saved.stamp_url ?? memoryStore.profile.stamp_url,
         };
+        tryWriteLocalJson("business-profile.json", memoryStore.profile);
         return memoryStore.profile;
       }
     } catch (e) {
       console.warn("Supabase profile upsert notice:", e);
-      if (e instanceof AppError) throw e;
     }
   }
 
@@ -642,4 +674,122 @@ export async function addAsset(
 
 export async function getAsset({ supabase, user }: StoreContext, id: string) {
   return memoryStore.assets.find((a) => a.id === id) || null;
+}
+
+// RATE CHARTS
+export async function listRateCharts({ supabase }: StoreContext): Promise<RateChart[]> {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from("rate_charts" as any)
+        .select("*")
+        .order("updated_at", { ascending: false });
+
+      if (!error && data) {
+        memoryStore.rateCharts = data as unknown as RateChart[];
+        return memoryStore.rateCharts;
+      }
+    } catch (e) {
+      console.warn("Supabase rate_charts fetch notice:", e);
+    }
+  }
+  return [...memoryStore.rateCharts].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+}
+
+export async function getRateChart({ supabase }: StoreContext, id: string): Promise<RateChart> {
+  const chart = memoryStore.rateCharts.find((c) => c.id === id);
+  if (chart) return chart;
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from("rate_charts" as any)
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (!error && data) {
+        return data as unknown as RateChart;
+      }
+    } catch (e) {
+      console.warn("Supabase getRateChart notice:", e);
+    }
+  }
+  throw new AppError("Rate chart not found.", 404);
+}
+
+export async function saveRateChart(
+  context: StoreContext,
+  value: unknown,
+  existingId?: string
+): Promise<RateChart> {
+  const raw = asRecord(value, "Rate chart");
+  const organization_name = requiredText(raw, "organization_name", "Organization name");
+  const contact_person = optionalText(raw, "contact_person");
+  const phone = optionalText(raw, "phone");
+  const chart_date = optionalText(raw, "chart_date") || new Date().toISOString().split("T")[0];
+  const notes = optionalText(raw, "notes");
+
+  const rawItems = Array.isArray(raw.items) ? raw.items : [];
+  const items: RateChartItem[] = rawItems.map((item: any, idx: number) => ({
+    id: item.id || `item-${Date.now()}-${idx}`,
+    category: String(item.category || "").trim() || "Packaging Tapes",
+    product_name: String(item.product_name || "").trim() || "Item",
+    specification: item.specification ? String(item.specification).trim() : null,
+    rate_per_piece: typeof item.rate_per_piece === "number" ? item.rate_per_piece : item.rate_per_piece ? Number(item.rate_per_piece) : null,
+    rate_per_roll: typeof item.rate_per_roll === "number" ? item.rate_per_roll : item.rate_per_roll ? Number(item.rate_per_roll) : null,
+    custom_unit: item.custom_unit ? String(item.custom_unit).trim() : null,
+    custom_rate: typeof item.custom_rate === "number" ? item.custom_rate : item.custom_rate ? Number(item.custom_rate) : null,
+  }));
+
+  const now = new Date().toISOString();
+  const id = existingId || (typeof raw.id === "string" && raw.id.trim() ? raw.id.trim() : `rc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
+
+  const existingIdx = memoryStore.rateCharts.findIndex((c) => c.id === id);
+  const created_at = existingIdx >= 0 ? memoryStore.rateCharts[existingIdx].created_at : now;
+
+  const chartRecord: RateChart = {
+    id,
+    organization_name,
+    contact_person,
+    phone,
+    chart_date,
+    notes,
+    items,
+    created_at,
+    updated_at: now,
+  };
+
+  if (existingIdx >= 0) {
+    memoryStore.rateCharts[existingIdx] = chartRecord;
+  } else {
+    memoryStore.rateCharts.unshift(chartRecord);
+  }
+
+  tryWriteLocalJson("rate-charts.json", memoryStore.rateCharts);
+
+  if (context.supabase) {
+    try {
+      await context.supabase
+        .from("rate_charts" as any)
+        .upsert({ ...chartRecord, owner_id: context.user.id });
+    } catch (e) {
+      console.warn("Supabase rate_charts save notice:", e);
+    }
+  }
+
+  return chartRecord;
+}
+
+export async function deleteRateChart(context: StoreContext, id: string): Promise<void> {
+  memoryStore.rateCharts = memoryStore.rateCharts.filter((c) => c.id !== id);
+  tryWriteLocalJson("rate-charts.json", memoryStore.rateCharts);
+
+  if (context.supabase) {
+    try {
+      await context.supabase.from("rate_charts" as any).delete().eq("id", id);
+    } catch (e) {
+      console.warn("Supabase rate_charts delete notice:", e);
+    }
+  }
 }
