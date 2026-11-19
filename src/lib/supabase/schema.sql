@@ -7,8 +7,16 @@
 -- 3. Click "New Query", paste this entire script, and click "Run" (or Ctrl+Enter)
 -- ==============================================================================
 
+-- 0. CLEAN RESET (Drops any old/partial tables to prevent column mismatch errors)
+drop table if exists public.invoice_items cascade;
+drop table if exists public.invoices cascade;
+drop table if exists public.customers cascade;
+drop table if exists public.products cascade;
+drop table if exists public.business_profiles cascade;
+drop table if exists public.assets cascade;
+
 -- 1. BUSINESS PROFILES TABLE
-create table if not exists public.business_profiles (
+create table public.business_profiles (
   id text primary key default gen_random_uuid()::text,
   owner_id text not null default 'abira-staff-admin',
   business_name text not null,
@@ -33,7 +41,7 @@ create table if not exists public.business_profiles (
 );
 
 -- 2. CUSTOMERS TABLE
-create table if not exists public.customers (
+create table public.customers (
   id text primary key default gen_random_uuid()::text,
   owner_id text not null default 'abira-staff-admin',
   customer_name text not null,
@@ -50,7 +58,7 @@ create table if not exists public.customers (
 );
 
 -- 3. PRODUCTS TABLE
-create table if not exists public.products (
+create table public.products (
   id text primary key default gen_random_uuid()::text,
   owner_id text not null default 'abira-staff-admin',
   category text not null,
@@ -61,7 +69,7 @@ create table if not exists public.products (
 );
 
 -- 4. INVOICES TABLE
-create table if not exists public.invoices (
+create table public.invoices (
   id text primary key default gen_random_uuid()::text,
   owner_id text not null default 'abira-staff-admin',
   invoice_number text not null unique,
@@ -95,7 +103,7 @@ create table if not exists public.invoices (
 );
 
 -- 5. INVOICE ITEMS TABLE
-create table if not exists public.invoice_items (
+create table public.invoice_items (
   id text primary key default gen_random_uuid()::text,
   owner_id text not null default 'abira-staff-admin',
   invoice_id text not null references public.invoices(id) on delete cascade,
@@ -114,7 +122,7 @@ create table if not exists public.invoice_items (
 );
 
 -- 6. ASSETS TABLE (LOGOS & PAYMENT QR CODES)
-create table if not exists public.assets (
+create table public.assets (
   id text primary key default gen_random_uuid()::text,
   owner_id text not null default 'abira-staff-admin',
   type text not null check (type in ('logo', 'qr')),
