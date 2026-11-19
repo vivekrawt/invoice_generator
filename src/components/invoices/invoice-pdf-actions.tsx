@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { pdf } from "@react-pdf/renderer";
 import { InvoicePDFDocument } from "./invoice-pdf-document";
+import { HARDCODED_BUSINESS_PROFILE } from "@/lib/constants/business-defaults";
 import type { Invoice } from "@/types/database.types";
 
 interface InvoicePDFActionsProps {
@@ -30,29 +31,27 @@ export function InvoicePDFActions({
   }, [pdfBlobUrl]);
 
   const generateBlob = async (): Promise<Blob> => {
-    if (!invoice.business_snapshot || !invoice.customer_snapshot || !invoice.items?.length) {
-      throw new Error("Invoice snapshot or line-item data is missing. Reload the saved invoice and try again.");
+    if (!invoice.customer_snapshot || !invoice.items?.length) {
+      throw new Error("Customer details or line-item data is missing. Reload the saved invoice and try again.");
     }
 
-    let enrichedInvoice = invoice;
-    try {
-      const cached = typeof window !== "undefined" ? localStorage.getItem("abira_business_profile") : null;
-      if (cached) {
-        const bp = JSON.parse(cached) as Partial<any>;
-        if (bp) {
-          enrichedInvoice = {
-            ...enrichedInvoice,
-            business_snapshot: {
-              ...enrichedInvoice.business_snapshot,
-              stamp_url: enrichedInvoice.business_snapshot.stamp_url || bp.stamp_url || null,
-              signature_url: enrichedInvoice.business_snapshot.signature_url || bp.signature_url || null,
-              payment_qr_url: enrichedInvoice.business_snapshot.payment_qr_url || bp.payment_qr_url || null,
-              logo_url: enrichedInvoice.business_snapshot.logo_url || bp.logo_url || null,
-            },
-          };
-        }
-      }
-    } catch {}
+    const rawB = invoice.business_snapshot || ({} as any);
+    const enrichedB = {
+      ...HARDCODED_BUSINESS_PROFILE,
+      ...rawB,
+      bank_account_name: rawB.bank_account_name || HARDCODED_BUSINESS_PROFILE.bank_account_name,
+      bank_name: rawB.bank_name || HARDCODED_BUSINESS_PROFILE.bank_name,
+      account_number: rawB.account_number || HARDCODED_BUSINESS_PROFILE.account_number,
+      ifsc: rawB.ifsc || HARDCODED_BUSINESS_PROFILE.ifsc,
+      stamp_url: rawB.stamp_url || HARDCODED_BUSINESS_PROFILE.stamp_url,
+      signature_url: rawB.signature_url || HARDCODED_BUSINESS_PROFILE.signature_url,
+      payment_qr_url: rawB.payment_qr_url || HARDCODED_BUSINESS_PROFILE.payment_qr_url,
+    };
+
+    const enrichedInvoice = {
+      ...invoice,
+      business_snapshot: enrichedB,
+    };
 
     const doc = <InvoicePDFDocument invoice={enrichedInvoice} />;
     const asPdf = pdf(doc);

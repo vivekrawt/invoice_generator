@@ -32,6 +32,7 @@ import { apiRequest, jsonBody } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/utils";
 import { convertNumberToIndianWords, getIndianFinancialYear } from "@/lib/number-to-words";
 import { BROCHURE_PRODUCTS, PRODUCT_CATEGORIES } from "@/lib/constants/products-seed";
+import { HARDCODED_BUSINESS_PROFILE } from "@/lib/constants/business-defaults";
 import type {
   Customer,
   BusinessProfile,
@@ -111,16 +112,34 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
   const [additionalNotes, setAdditionalNotes] = React.useState<string>("");
   const [terms, setTerms] = React.useState<string>("");
 
-  // Business Profile & Bank Details explicitly for this invoice
-  const [businessProfile, setBusinessProfile] = React.useState<BusinessProfile | null>(null);
-  const [bankAccountName, setBankAccountName] = React.useState<string>("");
-  const [bankName, setBankName] = React.useState<string>("");
-  const [accountNumber, setAccountNumber] = React.useState<string>("");
-  const [ifsc, setIfsc] = React.useState<string>("");
-  const [upiId, setUpiId] = React.useState<string>("");
-  const [paymentQrUrl, setPaymentQrUrl] = React.useState<string>("");
-  const [stampUrl, setStampUrl] = React.useState<string>("");
-  const [signatureUrl, setSignatureUrl] = React.useState<string>("");
+  // Business Profile & Bank Details explicitly for this invoice (hardcoded defaults ensure resilience)
+  const [businessProfile, setBusinessProfile] = React.useState<BusinessProfile>(
+    HARDCODED_BUSINESS_PROFILE as unknown as BusinessProfile
+  );
+  const [bankAccountName, setBankAccountName] = React.useState<string>(
+    HARDCODED_BUSINESS_PROFILE.bank_account_name || ""
+  );
+  const [bankName, setBankName] = React.useState<string>(
+    HARDCODED_BUSINESS_PROFILE.bank_name || ""
+  );
+  const [accountNumber, setAccountNumber] = React.useState<string>(
+    HARDCODED_BUSINESS_PROFILE.account_number || ""
+  );
+  const [ifsc, setIfsc] = React.useState<string>(
+    HARDCODED_BUSINESS_PROFILE.ifsc || ""
+  );
+  const [upiId, setUpiId] = React.useState<string>(
+    HARDCODED_BUSINESS_PROFILE.upi_id || ""
+  );
+  const [paymentQrUrl, setPaymentQrUrl] = React.useState<string>(
+    HARDCODED_BUSINESS_PROFILE.payment_qr_url || ""
+  );
+  const [stampUrl, setStampUrl] = React.useState<string>(
+    HARDCODED_BUSINESS_PROFILE.stamp_url || ""
+  );
+  const [signatureUrl, setSignatureUrl] = React.useState<string>(
+    HARDCODED_BUSINESS_PROFILE.signature_url || ""
+  );
 
   const handleQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -284,12 +303,17 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
         const businessProfileData = await apiRequest<BusinessProfile>("/api/data/business-profile");
         if (active) {
           const mergedProfile: BusinessProfile = {
-            ...(localCachedProfile || {} as BusinessProfile),
+            ...HARDCODED_BUSINESS_PROFILE,
+            ...(localCachedProfile || {}),
             ...businessProfileData,
-            stamp_url: businessProfileData.stamp_url || localCachedProfile?.stamp_url || null,
-            signature_url: businessProfileData.signature_url || localCachedProfile?.signature_url || null,
-            payment_qr_url: businessProfileData.payment_qr_url || localCachedProfile?.payment_qr_url || null,
-            logo_url: businessProfileData.logo_url || localCachedProfile?.logo_url || null,
+            bank_account_name: businessProfileData.bank_account_name || localCachedProfile?.bank_account_name || HARDCODED_BUSINESS_PROFILE.bank_account_name,
+            bank_name: businessProfileData.bank_name || localCachedProfile?.bank_name || HARDCODED_BUSINESS_PROFILE.bank_name,
+            account_number: businessProfileData.account_number || localCachedProfile?.account_number || HARDCODED_BUSINESS_PROFILE.account_number,
+            ifsc: businessProfileData.ifsc || localCachedProfile?.ifsc || HARDCODED_BUSINESS_PROFILE.ifsc,
+            stamp_url: businessProfileData.stamp_url || localCachedProfile?.stamp_url || HARDCODED_BUSINESS_PROFILE.stamp_url,
+            signature_url: businessProfileData.signature_url || localCachedProfile?.signature_url || HARDCODED_BUSINESS_PROFILE.signature_url,
+            payment_qr_url: businessProfileData.payment_qr_url || localCachedProfile?.payment_qr_url || HARDCODED_BUSINESS_PROFILE.payment_qr_url,
+            logo_url: businessProfileData.logo_url || localCachedProfile?.logo_url || HARDCODED_BUSINESS_PROFILE.logo_url,
           };
           setBusinessProfile(mergedProfile);
           if (mergedProfile.default_terms) {
@@ -498,23 +522,23 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
       };
 
       const businessSnapshot: BusinessSnapshot = {
-        business_name: businessProfile.business_name,
-        address: businessProfile.address,
-        city: businessProfile.city,
-        state: businessProfile.state,
-        pincode: businessProfile.pincode,
-        phone: businessProfile.phone,
+        business_name: businessProfile?.business_name || HARDCODED_BUSINESS_PROFILE.business_name,
+        address: businessProfile?.address || HARDCODED_BUSINESS_PROFILE.address,
+        city: businessProfile?.city || HARDCODED_BUSINESS_PROFILE.city,
+        state: businessProfile?.state || HARDCODED_BUSINESS_PROFILE.state,
+        pincode: businessProfile?.pincode || HARDCODED_BUSINESS_PROFILE.pincode,
+        phone: businessProfile?.phone || HARDCODED_BUSINESS_PROFILE.phone,
         email: businessProfile?.email || null,
         pan: businessProfile?.pan || null,
-        bank_account_name: bankAccountName.trim() || null,
-        bank_name: bankName.trim() || null,
-        account_number: accountNumber.trim() || null,
-        ifsc: ifsc.trim().toUpperCase() || null,
+        bank_account_name: bankAccountName.trim() || HARDCODED_BUSINESS_PROFILE.bank_account_name,
+        bank_name: bankName.trim() || HARDCODED_BUSINESS_PROFILE.bank_name,
+        account_number: accountNumber.trim() || HARDCODED_BUSINESS_PROFILE.account_number,
+        ifsc: ifsc.trim().toUpperCase() || HARDCODED_BUSINESS_PROFILE.ifsc,
         upi_id: upiId.trim() || null,
         logo_url: businessProfile?.logo_url || null,
-        payment_qr_url: paymentQrUrl || businessProfile?.payment_qr_url || null,
-        stamp_url: stampUrl || businessProfile?.stamp_url || null,
-        signature_url: signatureUrl || businessProfile?.signature_url || null,
+        payment_qr_url: paymentQrUrl || HARDCODED_BUSINESS_PROFILE.payment_qr_url,
+        stamp_url: stampUrl || HARDCODED_BUSINESS_PROFILE.stamp_url,
+        signature_url: signatureUrl || HARDCODED_BUSINESS_PROFILE.signature_url,
       };
 
       const finalShippingSnapshot = shipToDifferent ? shippingAddress : null;

@@ -22,35 +22,22 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ChangeSharedPasswordForm } from "@/components/auth/change-shared-password-form";
 import { apiRequest, jsonBody } from "@/lib/api-client";
+import { HARDCODED_BUSINESS_PROFILE } from "@/lib/constants/business-defaults";
 import type { BusinessProfile } from "@/types/database.types";
 
 const defaultProfile: Omit<BusinessProfile, "created_at" | "updated_at"> = {
-  id: "00000000-0000-0000-0000-000000000001",
-  business_name: "ABIRA Enterprises",
-  address: "ABIRA Enterprises, Millenia 2, Sector 37D, Gurugram, Haryana – 122001",
-  city: "Gurugram",
-  state: "Haryana",
-  pincode: "122001",
-  phone: "8882511472",
-  email: "",
-  pan: "",
-  bank_account_name: "",
-  bank_name: "",
-  account_number: "",
-  ifsc: "",
-  upi_id: "",
-  logo_url: "",
-  payment_qr_url: "",
-  signature_url: "",
-  stamp_url: "",
-  default_terms: `Payment Terms:
-Payment should be initiated within 15 days of delivery.
-
-Delivery Policy:
-Products are generally delivered within 3 days of ordering.
-
-Return and Exchange Policy:
-No returns or exchanges are accepted after delivery, except in cases involving defective or damaged products.`,
+  ...HARDCODED_BUSINESS_PROFILE,
+  email: HARDCODED_BUSINESS_PROFILE.email || "",
+  pan: HARDCODED_BUSINESS_PROFILE.pan || "",
+  bank_account_name: HARDCODED_BUSINESS_PROFILE.bank_account_name || "",
+  bank_name: HARDCODED_BUSINESS_PROFILE.bank_name || "",
+  account_number: HARDCODED_BUSINESS_PROFILE.account_number || "",
+  ifsc: HARDCODED_BUSINESS_PROFILE.ifsc || "",
+  upi_id: HARDCODED_BUSINESS_PROFILE.upi_id || "",
+  logo_url: HARDCODED_BUSINESS_PROFILE.logo_url || "",
+  payment_qr_url: HARDCODED_BUSINESS_PROFILE.payment_qr_url || "",
+  signature_url: HARDCODED_BUSINESS_PROFILE.signature_url || "",
+  stamp_url: HARDCODED_BUSINESS_PROFILE.stamp_url || "",
 };
 
 export default function SettingsPage() {
@@ -105,17 +92,23 @@ export default function SettingsPage() {
           ...defaultProfile,
           ...cachedParsed,
           ...bp,
-          email: bp.email ?? cachedParsed.email ?? "",
-          pan: bp.pan ?? cachedParsed.pan ?? "",
-          bank_account_name: bp.bank_account_name ?? cachedParsed.bank_account_name ?? "",
-          bank_name: bp.bank_name ?? cachedParsed.bank_name ?? "",
-          account_number: bp.account_number ?? cachedParsed.account_number ?? "",
-          ifsc: bp.ifsc ?? cachedParsed.ifsc ?? "",
-          upi_id: bp.upi_id ?? cachedParsed.upi_id ?? "",
-          logo_url: bp.logo_url || cachedParsed.logo_url || "",
-          payment_qr_url: bp.payment_qr_url || cachedParsed.payment_qr_url || "",
-          signature_url: bp.signature_url || cachedParsed.signature_url || "",
-          stamp_url: bp.stamp_url || cachedParsed.stamp_url || "",
+          business_name: bp.business_name || defaultProfile.business_name,
+          address: bp.address || defaultProfile.address,
+          city: bp.city || defaultProfile.city,
+          state: bp.state || defaultProfile.state,
+          pincode: bp.pincode || defaultProfile.pincode,
+          phone: bp.phone || defaultProfile.phone,
+          email: bp.email || cachedParsed.email || defaultProfile.email,
+          pan: bp.pan || cachedParsed.pan || defaultProfile.pan,
+          bank_account_name: bp.bank_account_name || cachedParsed.bank_account_name || defaultProfile.bank_account_name,
+          bank_name: bp.bank_name || cachedParsed.bank_name || defaultProfile.bank_name,
+          account_number: bp.account_number || cachedParsed.account_number || defaultProfile.account_number,
+          ifsc: bp.ifsc || cachedParsed.ifsc || defaultProfile.ifsc,
+          upi_id: bp.upi_id || cachedParsed.upi_id || defaultProfile.upi_id,
+          logo_url: bp.logo_url || cachedParsed.logo_url || defaultProfile.logo_url,
+          payment_qr_url: bp.payment_qr_url || cachedParsed.payment_qr_url || defaultProfile.payment_qr_url,
+          signature_url: bp.signature_url || cachedParsed.signature_url || defaultProfile.signature_url,
+          stamp_url: bp.stamp_url || cachedParsed.stamp_url || defaultProfile.stamp_url,
           default_terms: bp.default_terms || cachedParsed.default_terms || defaultProfile.default_terms,
         };
         setProfile(merged);
@@ -253,24 +246,24 @@ export default function SettingsPage() {
       setMessage(null);
 
       const payload = {
-        business_name: profile.business_name.trim(),
-        address: profile.address.trim(),
-        city: profile.city.trim(),
-        state: profile.state.trim(),
-        pincode: profile.pincode.trim(),
-        phone: profile.phone.trim(),
-        email: profile.email?.trim() || null,
-        pan: profile.pan?.trim() ? profile.pan.trim().toUpperCase() : null,
-        bank_account_name: profile.bank_account_name?.trim() || null,
-        bank_name: profile.bank_name?.trim() || null,
-        account_number: profile.account_number?.trim() || null,
-        ifsc: profile.ifsc?.trim() ? profile.ifsc.trim().toUpperCase() : null,
-        upi_id: profile.upi_id?.trim() || null,
-        logo_url: profile.logo_url || null,
-        payment_qr_url: profile.payment_qr_url || null,
-        signature_url: profile.signature_url || null,
-        stamp_url: profile.stamp_url || null,
-        default_terms: profile.default_terms?.trim() || null,
+        business_name: profile.business_name.trim() || HARDCODED_BUSINESS_PROFILE.business_name,
+        address: profile.address.trim() || HARDCODED_BUSINESS_PROFILE.address,
+        city: profile.city.trim() || HARDCODED_BUSINESS_PROFILE.city,
+        state: profile.state.trim() || HARDCODED_BUSINESS_PROFILE.state,
+        pincode: profile.pincode.trim() || HARDCODED_BUSINESS_PROFILE.pincode,
+        phone: profile.phone.trim() || HARDCODED_BUSINESS_PROFILE.phone,
+        email: profile.email?.trim() || HARDCODED_BUSINESS_PROFILE.email || null,
+        pan: profile.pan?.trim() ? profile.pan.trim().toUpperCase() : (HARDCODED_BUSINESS_PROFILE.pan || null),
+        bank_account_name: profile.bank_account_name?.trim() || HARDCODED_BUSINESS_PROFILE.bank_account_name || null,
+        bank_name: profile.bank_name?.trim() || HARDCODED_BUSINESS_PROFILE.bank_name || null,
+        account_number: profile.account_number?.trim() || HARDCODED_BUSINESS_PROFILE.account_number || null,
+        ifsc: profile.ifsc?.trim() ? profile.ifsc.trim().toUpperCase() : (HARDCODED_BUSINESS_PROFILE.ifsc || null),
+        upi_id: profile.upi_id?.trim() || HARDCODED_BUSINESS_PROFILE.upi_id || null,
+        logo_url: profile.logo_url || HARDCODED_BUSINESS_PROFILE.logo_url || null,
+        payment_qr_url: profile.payment_qr_url || HARDCODED_BUSINESS_PROFILE.payment_qr_url || null,
+        signature_url: profile.signature_url || HARDCODED_BUSINESS_PROFILE.signature_url || null,
+        stamp_url: profile.stamp_url || HARDCODED_BUSINESS_PROFILE.stamp_url || null,
+        default_terms: profile.default_terms?.trim() || HARDCODED_BUSINESS_PROFILE.default_terms || null,
       };
 
       const mergedPayload = { ...profile, ...payload };

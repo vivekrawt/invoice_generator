@@ -190,6 +190,10 @@ insert into public.business_profiles (
   state,
   pincode,
   phone,
+  bank_account_name,
+  bank_name,
+  account_number,
+  ifsc,
   default_terms
 ) values (
   '00000000-0000-0000-0000-000000000001',
@@ -200,6 +204,10 @@ insert into public.business_profiles (
   'Haryana',
   '122001',
   '8882511472',
+  'DHEERENDRA SINGH',
+  'UTTAR PARDESH GRAMIN BANK',
+  '52320100015866',
+  'BARBOBUPGBX',
   'Payment Terms:
 Payment should be initiated within 15 days of delivery.
 
@@ -208,7 +216,17 @@ Products are generally delivered within 3 days of ordering.
 
 Return and Exchange Policy:
 No returns or exchanges are accepted after delivery, except in cases involving defective or damaged products.'
-) on conflict (id) do nothing;
+) on conflict (id) do update set
+  business_name = excluded.business_name,
+  address = excluded.address,
+  city = excluded.city,
+  state = excluded.state,
+  pincode = excluded.pincode,
+  phone = excluded.phone,
+  bank_account_name = excluded.bank_account_name,
+  bank_name = excluded.bank_name,
+  account_number = excluded.account_number,
+  ifsc = excluded.ifsc;
 
 -- ==============================================================================
 -- 10. PRE-SEED 70+ BROCHURE PRODUCTS (6 CATEGORIES)

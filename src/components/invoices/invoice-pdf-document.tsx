@@ -9,6 +9,7 @@ import {
 } from "@react-pdf/renderer";
 import type { Invoice } from "@/types/database.types";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { HARDCODED_BUSINESS_PROFILE } from "@/lib/constants/business-defaults";
 
 const NAVY = "#0b1f3a";
 const TEXT_MAIN = "#1e293b";
@@ -448,7 +449,21 @@ function resolvePdfImageUrl(url: string | null | undefined): string | null {
 }
 
 export function InvoicePDFDocument({ invoice }: { invoice: Invoice }) {
-  const b = invoice.business_snapshot;
+  const rawB = invoice.business_snapshot || {};
+  const b = {
+    ...HARDCODED_BUSINESS_PROFILE,
+    ...rawB,
+    business_name: rawB.business_name || HARDCODED_BUSINESS_PROFILE.business_name,
+    address: rawB.address || HARDCODED_BUSINESS_PROFILE.address,
+    phone: rawB.phone || HARDCODED_BUSINESS_PROFILE.phone,
+    bank_account_name: rawB.bank_account_name || HARDCODED_BUSINESS_PROFILE.bank_account_name,
+    bank_name: rawB.bank_name || HARDCODED_BUSINESS_PROFILE.bank_name,
+    account_number: rawB.account_number || HARDCODED_BUSINESS_PROFILE.account_number,
+    ifsc: rawB.ifsc || HARDCODED_BUSINESS_PROFILE.ifsc,
+    payment_qr_url: rawB.payment_qr_url || HARDCODED_BUSINESS_PROFILE.payment_qr_url,
+    stamp_url: rawB.stamp_url || HARDCODED_BUSINESS_PROFILE.stamp_url,
+    signature_url: rawB.signature_url || HARDCODED_BUSINESS_PROFILE.signature_url,
+  };
   const c = invoice.customer_snapshot;
   const s = invoice.shipping_snapshot;
   const items = invoice.items || [];

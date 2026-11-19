@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { User, SupabaseClient } from "@supabase/supabase-js";
 import { BROCHURE_PRODUCTS } from "../constants/products-seed";
+import { HARDCODED_BUSINESS_PROFILE } from "../constants/business-defaults";
 import { AppError } from "../app-error";
 import { validateInvoiceWrite } from "../invoice-validation";
 import type {
@@ -44,39 +45,14 @@ function optionalText(record: RecordData, key: string): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-// Default preconfigured business profile
-function profileDefaults(ownerId: string = "abira-staff-admin"): BusinessProfile {
+// Default preconfigured business profile with hardcoded bank and business coordinates
+function profileDefaults(): BusinessProfile {
   const timestamp = new Date().toISOString();
   return {
-    id: "00000000-0000-0000-0000-000000000001",
-    business_name: "ABIRA Enterprises",
-    address: "ABIRA Enterprises, Millenia 2, Sector 37D, Gurugram, Haryana – 122001",
-    city: "Gurugram",
-    state: "Haryana",
-    pincode: "122001",
-    phone: "8882511472",
-    email: null,
-    pan: null,
-    bank_account_name: null,
-    bank_name: null,
-    account_number: null,
-    ifsc: null,
-    upi_id: null,
-    logo_url: null,
-    payment_qr_url: null,
-    signature_url: null,
-    stamp_url: null,
-    default_terms: `Payment Terms:
-Payment should be initiated within 15 days of delivery.
-
-Delivery Policy:
-Products are generally delivered within 3 days of ordering.
-
-Return and Exchange Policy:
-No returns or exchanges are accepted after delivery, except in cases involving defective or damaged products.`,
+    ...HARDCODED_BUSINESS_PROFILE,
     created_at: timestamp,
     updated_at: timestamp,
-  };
+  } as unknown as BusinessProfile;
 }
 
 // Helpers for server filesystem storage fallback
@@ -132,7 +108,12 @@ const memoryStore: MemoryStorage = {
 };
 
 // BUSINESS PROFILE
-export async function getBusinessProfile({ supabase, user }: StoreContext): Promise<BusinessProfile> {
+export async function getBusinessProfile({ supabase }: StoreContext): Promise<BusinessProfile> {
+  let profile: BusinessProfile = {
+    ...profileDefaults(),
+    ...memoryStore.profile,
+  };
+
   if (supabase) {
     try {
       const { data, error } = await supabase
@@ -142,40 +123,60 @@ export async function getBusinessProfile({ supabase, user }: StoreContext): Prom
         .maybeSingle();
 
       if (!error && data) {
-        memoryStore.profile = {
-          ...memoryStore.profile,
-          ...(data as unknown as BusinessProfile),
+        const row = data as Partial<BusinessProfile>;
+        // CRITICAL: Terms and conditions can be customized, but NEVER let null or empty fields from Supabase wipe out hardcoded bank details or images!
+        profile = {
+          ...profile,
+          default_terms: row.default_terms || profile.default_terms,
+          business_name: row.business_name || profile.business_name,
+          address: row.address || profile.address,
+          city: row.city || profile.city,
+          state: row.state || profile.state,
+          pincode: row.pincode || profile.pincode,
+          phone: row.phone || profile.phone,
+          email: row.email ?? profile.email,
+          pan: row.pan ?? profile.pan,
+          bank_account_name: row.bank_account_name || profile.bank_account_name,
+          bank_name: row.bank_name || profile.bank_name,
+          account_number: row.account_number || profile.account_number,
+          ifsc: row.ifsc || profile.ifsc,
+          upi_id: row.upi_id ?? profile.upi_id,
+          logo_url: row.logo_url ?? profile.logo_url,
+          payment_qr_url: row.payment_qr_url || profile.payment_qr_url,
+          signature_url: row.signature_url || profile.signature_url,
+          stamp_url: row.stamp_url || profile.stamp_url,
         };
-        return memoryStore.profile;
+        memoryStore.profile = profile;
+        return profile;
       }
     } catch (e) {
-      console.warn("Supabase profile read notice, using memory fallback:", e);
+      console.warn("Supabase profile read notice, using hardcoded fallback:", e);
     }
   }
-  return memoryStore.profile;
+  return profile;
 }
 
 export async function saveBusinessProfile(context: StoreContext, value: unknown): Promise<BusinessProfile> {
   const profile = asRecord(value, "Business profile");
   const fields = {
-    business_name: requiredText(profile, "business_name", "Business name"),
-    address: requiredText(profile, "address", "Address"),
-    city: requiredText(profile, "city", "City"),
-    state: requiredText(profile, "state", "State"),
-    pincode: requiredText(profile, "pincode", "PIN code"),
-    phone: requiredText(profile, "phone", "Phone"),
-    email: optionalText(profile, "email"),
-    pan: optionalText(profile, "pan")?.toUpperCase() ?? null,
-    bank_account_name: optionalText(profile, "bank_account_name"),
-    bank_name: optionalText(profile, "bank_name"),
-    account_number: optionalText(profile, "account_number"),
-    ifsc: optionalText(profile, "ifsc")?.toUpperCase() ?? null,
-    upi_id: optionalText(profile, "upi_id"),
-    logo_url: optionalText(profile, "logo_url"),
-    payment_qr_url: optionalText(profile, "payment_qr_url"),
-    signature_url: optionalText(profile, "signature_url"),
-    stamp_url: optionalText(profile, "stamp_url"),
-    default_terms: optionalText(profile, "default_terms"),
+    business_name: optionalText(profile, "business_name") || HARDCODED_BUSINESS_PROFILE.business_name,
+    address: optionalText(profile, "address") || HARDCODED_BUSINESS_PROFILE.address,
+    city: optionalText(profile, "city") || HARDCODED_BUSINESS_PROFILE.city,
+    state: optionalText(profile, "state") || HARDCODED_BUSINESS_PROFILE.state,
+    pincode: optionalText(profile, "pincode") || HARDCODED_BUSINESS_PROFILE.pincode,
+    phone: optionalText(profile, "phone") || HARDCODED_BUSINESS_PROFILE.phone,
+    email: optionalText(profile, "email") || HARDCODED_BUSINESS_PROFILE.email,
+    pan: optionalText(profile, "pan")?.toUpperCase() ?? HARDCODED_BUSINESS_PROFILE.pan,
+    bank_account_name: optionalText(profile, "bank_account_name") || HARDCODED_BUSINESS_PROFILE.bank_account_name,
+    bank_name: optionalText(profile, "bank_name") || HARDCODED_BUSINESS_PROFILE.bank_name,
+    account_number: optionalText(profile, "account_number") || HARDCODED_BUSINESS_PROFILE.account_number,
+    ifsc: optionalText(profile, "ifsc")?.toUpperCase() ?? HARDCODED_BUSINESS_PROFILE.ifsc,
+    upi_id: optionalText(profile, "upi_id") || HARDCODED_BUSINESS_PROFILE.upi_id,
+    logo_url: optionalText(profile, "logo_url") || HARDCODED_BUSINESS_PROFILE.logo_url,
+    payment_qr_url: optionalText(profile, "payment_qr_url") || HARDCODED_BUSINESS_PROFILE.payment_qr_url,
+    signature_url: optionalText(profile, "signature_url") || HARDCODED_BUSINESS_PROFILE.signature_url,
+    stamp_url: optionalText(profile, "stamp_url") || HARDCODED_BUSINESS_PROFILE.stamp_url,
+    default_terms: optionalText(profile, "default_terms") || HARDCODED_BUSINESS_PROFILE.default_terms,
     updated_at: new Date().toISOString(),
   };
 
@@ -197,45 +198,14 @@ export async function saveBusinessProfile(context: StoreContext, value: unknown)
 
       const targetId = existingRow?.id || memoryStore.profile.id || "00000000-0000-0000-0000-000000000001";
 
-      let res = await context.supabase
+      await context.supabase
         .from("business_profiles")
         .upsert(
-          { id: targetId, owner_id: context.user.id, ...fields } as any,
+          { id: targetId, ...fields } as any,
           { onConflict: "id" }
-        )
-        .select("*")
-        .single();
-
-      // If signature_url or stamp_url column is not yet present in Supabase table,
-      // fallback to saving all other core business profile details cleanly
-      if (res.error && (res.error.message?.includes("column") || res.error.message?.includes("signature_url") || res.error.message?.includes("stamp_url"))) {
-        console.warn("Retrying profile save without newer image columns:", res.error.message);
-        const { signature_url, stamp_url, ...coreFields } = fields;
-        res = await context.supabase
-          .from("business_profiles")
-          .upsert(
-            { id: targetId, owner_id: context.user.id, ...coreFields } as any,
-            { onConflict: "id" }
-          )
-          .select("*")
-          .single();
-      }
-
-      if (res.error) {
-        console.error("Supabase profile upsert error:", res.error);
-      } else if (res.data) {
-        const saved = res.data as unknown as BusinessProfile;
-        memoryStore.profile = {
-          ...memoryStore.profile,
-          ...saved,
-          signature_url: fields.signature_url ?? saved.signature_url ?? memoryStore.profile.signature_url,
-          stamp_url: fields.stamp_url ?? saved.stamp_url ?? memoryStore.profile.stamp_url,
-        };
-        tryWriteLocalJson("business-profile.json", memoryStore.profile);
-        return memoryStore.profile;
-      }
+        );
     } catch (e) {
-      console.warn("Supabase profile upsert notice:", e);
+      console.warn("Supabase profile save notice:", e);
     }
   }
 

@@ -8,6 +8,7 @@ import {
   Image,
 } from "@react-pdf/renderer";
 import type { RateChart, RateChartItem, BusinessProfile } from "@/types/database.types";
+import { HARDCODED_BUSINESS_PROFILE } from "@/lib/constants/business-defaults";
 
 const NAVY = "#0b1f3a";
 const TEXT_MAIN = "#1e293b";
@@ -324,14 +325,20 @@ interface RateChartPDFDocumentProps {
 }
 
 export function RateChartPDFDocument({ chart, profile }: RateChartPDFDocumentProps) {
-  const businessName = profile?.business_name || "ABIRA Enterprises";
-  const address = profile?.address || "Millenia 2, Sector 37D, Gurugram, Haryana – 122001";
-  const phone = profile?.phone || "8882511472";
-  const email = profile?.email;
-  const pan = profile?.pan;
+  const b = {
+    ...HARDCODED_BUSINESS_PROFILE,
+    ...profile,
+    stamp_url: profile?.stamp_url || HARDCODED_BUSINESS_PROFILE.stamp_url,
+    signature_url: profile?.signature_url || HARDCODED_BUSINESS_PROFILE.signature_url,
+  };
+  const businessName = b.business_name;
+  const address = b.address;
+  const phone = b.phone;
+  const email = b.email;
+  const pan = b.pan;
 
-  const stampUrl = resolvePdfImageUrl(profile?.stamp_url);
-  const signatureUrl = resolvePdfImageUrl(profile?.signature_url);
+  const stampUrl = resolvePdfImageUrl(b.stamp_url);
+  const signatureUrl = resolvePdfImageUrl(b.signature_url);
 
   return (
     <Document

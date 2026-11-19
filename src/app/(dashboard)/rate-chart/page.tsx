@@ -44,6 +44,7 @@ import {
 import { pdf } from "@react-pdf/renderer";
 import { apiRequest, jsonBody } from "@/lib/api-client";
 import { BROCHURE_PRODUCTS, PRODUCT_CATEGORIES } from "@/lib/constants/products-seed";
+import { HARDCODED_BUSINESS_PROFILE } from "@/lib/constants/business-defaults";
 import type { Customer, RateChart, RateChartItem, BusinessProfile } from "@/types/database.types";
 import {
   RateChartPDFDocument,
@@ -102,7 +103,9 @@ export default function RateChartPage() {
 
   // Customers for quick selection
   const [customers, setCustomers] = React.useState<Customer[]>([]);
-  const [businessProfile, setBusinessProfile] = React.useState<BusinessProfile | null>(null);
+  const [businessProfile, setBusinessProfile] = React.useState<BusinessProfile>(
+    HARDCODED_BUSINESS_PROFILE as unknown as BusinessProfile
+  );
 
   // Saved rate charts state
   const [savedCharts, setSavedCharts] = React.useState<RateChart[]>([]);
@@ -128,7 +131,21 @@ export default function RateChartPage() {
         try {
           const cachedProfile = typeof window !== "undefined" ? localStorage.getItem("abira_business_profile") : null;
           if (cachedProfile) {
-            setBusinessProfile(JSON.parse(cachedProfile));
+            const parsed = JSON.parse(cachedProfile);
+            setBusinessProfile((prev) => ({
+              ...(HARDCODED_BUSINESS_PROFILE as unknown as BusinessProfile),
+              ...parsed,
+              business_name: HARDCODED_BUSINESS_PROFILE.business_name,
+              address: HARDCODED_BUSINESS_PROFILE.address,
+              phone: HARDCODED_BUSINESS_PROFILE.phone,
+              bank_name: HARDCODED_BUSINESS_PROFILE.bank_name,
+              account_number: HARDCODED_BUSINESS_PROFILE.account_number,
+              ifsc: HARDCODED_BUSINESS_PROFILE.ifsc,
+              bank_account_name: HARDCODED_BUSINESS_PROFILE.bank_account_name,
+              stamp_url: HARDCODED_BUSINESS_PROFILE.stamp_url || parsed?.stamp_url || prev?.stamp_url || null,
+              signature_url: HARDCODED_BUSINESS_PROFILE.signature_url || parsed?.signature_url || prev?.signature_url || null,
+              payment_qr_url: HARDCODED_BUSINESS_PROFILE.payment_qr_url || parsed?.payment_qr_url || prev?.payment_qr_url || null,
+            }));
           }
         } catch {}
 
@@ -148,9 +165,18 @@ export default function RateChartPage() {
         }
         if (profRes.status === "fulfilled" && profRes.value) {
           setBusinessProfile((prev) => ({
+            ...(HARDCODED_BUSINESS_PROFILE as unknown as BusinessProfile),
             ...profRes.value,
-            stamp_url: profRes.value.stamp_url || prev?.stamp_url || null,
-            signature_url: profRes.value.signature_url || prev?.signature_url || null,
+            business_name: HARDCODED_BUSINESS_PROFILE.business_name,
+            address: HARDCODED_BUSINESS_PROFILE.address,
+            phone: HARDCODED_BUSINESS_PROFILE.phone,
+            bank_name: HARDCODED_BUSINESS_PROFILE.bank_name,
+            account_number: HARDCODED_BUSINESS_PROFILE.account_number,
+            ifsc: HARDCODED_BUSINESS_PROFILE.ifsc,
+            bank_account_name: HARDCODED_BUSINESS_PROFILE.bank_account_name,
+            stamp_url: HARDCODED_BUSINESS_PROFILE.stamp_url || profRes.value.stamp_url || prev?.stamp_url || null,
+            signature_url: HARDCODED_BUSINESS_PROFILE.signature_url || profRes.value.signature_url || prev?.signature_url || null,
+            payment_qr_url: HARDCODED_BUSINESS_PROFILE.payment_qr_url || profRes.value.payment_qr_url || prev?.payment_qr_url || null,
           }));
         }
       } catch (e) {
