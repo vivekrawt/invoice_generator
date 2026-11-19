@@ -70,12 +70,32 @@ export default function SettingsPage() {
 
   React.useEffect(() => {
     let active = true;
+
+    // Immediate hydration from localStorage so settings are NEVER lost on refresh
+    try {
+      const cached = typeof window !== "undefined" ? localStorage.getItem("abira_business_profile") : null;
+      if (cached) {
+        const parsed = JSON.parse(cached) as Partial<BusinessProfile>;
+        setProfile((prev) => ({
+          ...prev,
+          ...parsed,
+        }));
+        if (parsed.logo_url) setLogoPreviewUrl(parsed.logo_url);
+        if (parsed.payment_qr_url) setQrPreviewUrl(parsed.payment_qr_url);
+        if (parsed.signature_url) setSignaturePreviewUrl(parsed.signature_url);
+        if (parsed.stamp_url) setStampPreviewUrl(parsed.stamp_url);
+        setProfileLoaded(true);
+        setLoading(false);
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+
     async function loadProfile() {
       try {
-        setLoading(true);
         const bp = await apiRequest<BusinessProfile>("/api/data/business-profile");
         if (!active) return;
-        setProfile({
+        const merged = {
           ...defaultProfile,
           ...bp,
           email: bp.email || "",
@@ -90,18 +110,28 @@ export default function SettingsPage() {
           signature_url: bp.signature_url || "",
           stamp_url: bp.stamp_url || "",
           default_terms: bp.default_terms || defaultProfile.default_terms,
-        });
+        };
+        setProfile(merged);
         setLogoPreviewUrl(bp.logo_url || "");
         setQrPreviewUrl(bp.payment_qr_url || "");
         setSignaturePreviewUrl(bp.signature_url || "");
         setStampPreviewUrl(bp.stamp_url || "");
         setProfileLoaded(true);
+
+        try {
+          localStorage.setItem("abira_business_profile", JSON.stringify(merged));
+        } catch {
+          // Ignore localStorage errors
+        }
       } catch (err) {
         if (active) {
-          setMessage({
-            text: err instanceof Error ? `Business settings could not be loaded: ${err.message}` : "Business settings could not be loaded.",
-            type: "error",
-          });
+          const hasCached = typeof window !== "undefined" && Boolean(localStorage.getItem("abira_business_profile"));
+          if (!hasCached) {
+            setMessage({
+              text: err instanceof Error ? `Business settings could not be loaded: ${err.message}` : "Business settings could not be loaded.",
+              type: "error",
+            });
+          }
         }
       } finally {
         if (active) setLoading(false);
@@ -217,11 +247,20 @@ export default function SettingsPage() {
         default_terms: profile.default_terms?.trim() || null,
       };
 
+      const mergedPayload = { ...profile, ...payload };
+      try {
+        localStorage.setItem("abira_business_profile", JSON.stringify(mergedPayload));
+      } catch {}
+
       const savedProfile = await apiRequest<BusinessProfile>("/api/data/business-profile", {
         method: "PUT",
         body: jsonBody(payload),
       });
-      setProfile({ ...savedProfile, ...payload });
+      const finalMerged = { ...savedProfile, ...payload };
+      setProfile(finalMerged);
+      try {
+        localStorage.setItem("abira_business_profile", JSON.stringify(finalMerged));
+      } catch {}
 
       setMessage({
         text: "Business settings and bank credentials updated successfully.",

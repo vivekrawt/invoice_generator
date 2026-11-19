@@ -262,6 +262,24 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
           return;
         }
 
+        // Read cached business profile if present
+        try {
+          const cached = typeof window !== "undefined" ? localStorage.getItem("abira_business_profile") : null;
+          if (cached) {
+            const parsed = JSON.parse(cached) as BusinessProfile;
+            setBusinessProfile(parsed);
+            if (parsed.default_terms) setTerms(parsed.default_terms);
+            if (parsed.bank_account_name) setBankAccountName(parsed.bank_account_name);
+            if (parsed.bank_name) setBankName(parsed.bank_name);
+            if (parsed.account_number) setAccountNumber(parsed.account_number);
+            if (parsed.ifsc) setIfsc(parsed.ifsc);
+            if (parsed.upi_id) setUpiId(parsed.upi_id);
+            if (parsed.payment_qr_url) setPaymentQrUrl(parsed.payment_qr_url);
+            if (parsed.stamp_url) setStampUrl(parsed.stamp_url);
+            if (parsed.signature_url) setSignatureUrl(parsed.signature_url);
+          }
+        } catch {}
+
         const businessProfileData = await apiRequest<BusinessProfile>("/api/data/business-profile");
         if (active) {
           setBusinessProfile(businessProfileData);
@@ -276,6 +294,10 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
           if (businessProfileData.payment_qr_url) setPaymentQrUrl(businessProfileData.payment_qr_url);
           if (businessProfileData.stamp_url) setStampUrl(businessProfileData.stamp_url);
           if (businessProfileData.signature_url) setSignatureUrl(businessProfileData.signature_url);
+
+          try {
+            localStorage.setItem("abira_business_profile", JSON.stringify(businessProfileData));
+          } catch {}
         }
       } catch (err) {
         if (active) {
