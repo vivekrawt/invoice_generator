@@ -110,7 +110,11 @@ export async function getBusinessProfile({ supabase, user }: StoreContext): Prom
         .maybeSingle();
 
       if (!error && data) {
-        return data as unknown as BusinessProfile;
+        memoryStore.profile = {
+          ...memoryStore.profile,
+          ...(data as unknown as BusinessProfile),
+        };
+        return memoryStore.profile;
       }
     } catch (e) {
       console.warn("Supabase profile read notice, using memory fallback:", e);
@@ -150,14 +154,56 @@ export async function saveBusinessProfile(context: StoreContext, value: unknown)
 
   if (context.supabase) {
     try {
-      const { data, error } = await context.supabase
+      const { data: existingRow } = await context.supabase
         .from("business_profiles")
-        .upsert({ id: memoryStore.profile.id, owner_id: context.user.id, ...fields } as any)
+        .select("id")
+        .limit(1)
+        .maybeSingle();
+
+      const targetId = existingRow?.id || memoryStore.profile.id || "00000000-0000-0000-0000-000000000001";
+
+      let res = await context.supabase
+        .from("business_profiles")
+        .upsert(
+          { id: targetId, owner_id: context.user.id, ...fields } as any,
+          { onConflict: "id" }
+        )
         .select("*")
         .single();
-      if (!error && data) return data as unknown as BusinessProfile;
+
+      // If signature_url or stamp_url column is not yet present in Supabase table,
+      // fallback to saving all other core business profile details cleanly
+      if (res.error && res.error.message?.includes("column")) {
+        console.warn("Retrying profile save without newer image columns:", res.error.message);
+        const { signature_url, stamp_url, ...coreFields } = fields;
+        res = await context.supabase
+          .from("business_profiles")
+          .upsert(
+            { id: targetId, owner_id: context.user.id, ...coreFields } as any,
+            { onConflict: "id" }
+          )
+          .select("*")
+          .single();
+      }
+
+      if (res.error) {
+        console.error("Supabase profile upsert error:", res.error);
+        throw new AppError(`Could not save to database: ${res.error.message}`);
+      }
+
+      if (res.data) {
+        const saved = res.data as unknown as BusinessProfile;
+        memoryStore.profile = {
+          ...memoryStore.profile,
+          ...saved,
+          signature_url: fields.signature_url ?? saved.signature_url ?? null,
+          stamp_url: fields.stamp_url ?? saved.stamp_url ?? null,
+        };
+        return memoryStore.profile;
+      }
     } catch (e) {
       console.warn("Supabase profile upsert notice:", e);
+      if (e instanceof AppError) throw e;
     }
   }
 
