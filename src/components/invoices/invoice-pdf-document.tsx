@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
     fontFamily: "Helvetica-Bold",
   },
   headerRight: {
-    width: "42%",
+    width: "48%",
     alignItems: "flex-end",
   },
   invoiceTitle: {
@@ -71,17 +71,19 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   metaGrid: {
-    width: "100%",
+    alignItems: "flex-end",
   },
   metaRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 2,
+    justifyContent: "flex-end",
+    alignItems: "center",
+    marginBottom: 2.5,
   },
   metaLabel: {
     fontSize: 8.5,
     color: TEXT_MUTED,
     fontFamily: "Helvetica",
+    marginRight: 4,
   },
   metaValue: {
     fontSize: 8.5,
@@ -367,14 +369,42 @@ const styles = StyleSheet.create({
     maxWidth: "55%",
   },
   signatureBox: {
-    width: "40%",
+    width: "45%",
     alignItems: "flex-end",
   },
   sigEntity: {
     fontSize: 8.5,
     fontFamily: "Helvetica-Bold",
     color: NAVY,
-    marginBottom: 24,
+    marginBottom: 4,
+  },
+  sigArea: {
+    width: 140,
+    alignItems: "center",
+  },
+  sigImageContainer: {
+    height: 52,
+    width: 140,
+    position: "relative",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  stampImage: {
+    position: "absolute",
+    width: 52,
+    height: 52,
+    objectFit: "contain",
+    opacity: 0.85,
+  },
+  signatureImage: {
+    position: "absolute",
+    width: 95,
+    height: 38,
+    objectFit: "contain",
+  },
+  sigPlaceholderSpace: {
+    height: 28,
   },
   sigLine: {
     borderBottomWidth: 1,
@@ -647,10 +677,32 @@ export function InvoicePDFDocument({ invoice }: { invoice: Invoice }) {
 
           <View style={styles.signatureBox}>
             <Text style={styles.sigEntity}>For ABIRA Enterprises</Text>
-            <View style={styles.sigLine} />
-            <Text style={styles.sigLabel}>Authorized Signatory</Text>
-            <Text style={styles.sigDetails}>Name: __________________________</Text>
-            <Text style={styles.sigDetails}>Date: __________________________</Text>
+
+            <View style={styles.sigArea}>
+              {b.stamp_url || b.signature_url ? (
+                <View style={styles.sigImageContainer}>
+                  {b.stamp_url && (
+                    /* eslint-disable-next-line jsx-a11y/alt-text */
+                    <Image src={b.stamp_url} style={styles.stampImage} />
+                  )}
+                  {b.signature_url && (
+                    /* eslint-disable-next-line jsx-a11y/alt-text */
+                    <Image src={b.signature_url} style={styles.signatureImage} />
+                  )}
+                </View>
+              ) : (
+                <View style={styles.sigPlaceholderSpace} />
+              )}
+
+              <View style={styles.sigLine} />
+              <Text style={styles.sigLabel}>Authorized Signatory</Text>
+              {!b.signature_url && (
+                <>
+                  <Text style={styles.sigDetails}>Name: __________________________</Text>
+                  <Text style={styles.sigDetails}>Date: __________________________</Text>
+                </>
+              )}
+            </View>
           </View>
         </View>
 

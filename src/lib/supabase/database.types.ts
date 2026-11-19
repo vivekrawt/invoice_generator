@@ -39,7 +39,7 @@ type InvoiceItemRow = InvoiceItem & {
 type AssetRow = {
   id: string;
   owner_id: string;
-  type: "logo" | "qr";
+  type: "logo" | "qr" | "signature" | "stamp";
   object_path: string;
   file_name: string;
   mime_type: string;

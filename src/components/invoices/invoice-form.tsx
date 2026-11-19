@@ -17,6 +17,8 @@ import {
   Landmark,
   QrCode,
   Upload,
+  PenTool,
+  Stamp,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -117,6 +119,8 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
   const [ifsc, setIfsc] = React.useState<string>("");
   const [upiId, setUpiId] = React.useState<string>("");
   const [paymentQrUrl, setPaymentQrUrl] = React.useState<string>("");
+  const [stampUrl, setStampUrl] = React.useState<string>("");
+  const [signatureUrl, setSignatureUrl] = React.useState<string>("");
 
   const handleQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -125,6 +129,30 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
     reader.onload = () => {
       if (typeof reader.result === "string") {
         setPaymentQrUrl(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleStampUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setStampUrl(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setSignatureUrl(reader.result);
       }
     };
     reader.readAsDataURL(file);
@@ -217,6 +245,8 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
             upi_id: business.upi_id || null,
             logo_url: business.logo_url || null,
             payment_qr_url: business.payment_qr_url || null,
+            signature_url: business.signature_url || null,
+            stamp_url: business.stamp_url || null,
             default_terms: source.terms || null,
             created_at: source.created_at,
             updated_at: source.updated_at,
@@ -227,6 +257,8 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
           if (business.ifsc) setIfsc(business.ifsc);
           if (business.upi_id) setUpiId(business.upi_id);
           if (business.payment_qr_url) setPaymentQrUrl(business.payment_qr_url);
+          if (business.stamp_url) setStampUrl(business.stamp_url);
+          if (business.signature_url) setSignatureUrl(business.signature_url);
           return;
         }
 
@@ -242,6 +274,8 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
           if (businessProfileData.ifsc) setIfsc(businessProfileData.ifsc);
           if (businessProfileData.upi_id) setUpiId(businessProfileData.upi_id);
           if (businessProfileData.payment_qr_url) setPaymentQrUrl(businessProfileData.payment_qr_url);
+          if (businessProfileData.stamp_url) setStampUrl(businessProfileData.stamp_url);
+          if (businessProfileData.signature_url) setSignatureUrl(businessProfileData.signature_url);
         }
       } catch (err) {
         if (active) {
@@ -448,6 +482,8 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
         upi_id: upiId.trim() || null,
         logo_url: businessProfile?.logo_url || null,
         payment_qr_url: paymentQrUrl || null,
+        stamp_url: stampUrl || null,
+        signature_url: signatureUrl || null,
       };
 
       const finalShippingSnapshot = shipToDifferent ? shippingAddress : null;
@@ -1241,6 +1277,94 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
                   accept="image/png, image/jpeg, image/webp"
                   className="hidden"
                   onChange={handleQrUpload}
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Company Stamp / Seal Upload */}
+          <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                <Stamp className="h-4 w-4 text-[#0b1f3a]" />
+                Company Stamp / Seal (Optional)
+              </Label>
+              <p className="text-[11px] text-slate-500">
+                Upload company seal for this invoice (Background-less PNG recommended).
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {stampUrl ? (
+                <div className="flex items-center gap-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={stampUrl}
+                    alt="Company Stamp"
+                    className="h-12 w-12 object-contain rounded border border-slate-200 p-0.5 bg-white"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setStampUrl("")}
+                    className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 h-7 px-2"
+                  >
+                    Remove Stamp
+                  </Button>
+                </div>
+              ) : null}
+              <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-sm">
+                <Upload className="h-3.5 w-3.5" />
+                <span>{stampUrl ? "Change Stamp" : "Upload Stamp"}</span>
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp"
+                  className="hidden"
+                  onChange={handleStampUpload}
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Authorized Signature Upload */}
+          <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                <PenTool className="h-4 w-4 text-[#0b1f3a]" />
+                Authorized Signature (Optional)
+              </Label>
+              <p className="text-[11px] text-slate-500">
+                Upload official signatory signature (Background-less PNG recommended).
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {signatureUrl ? (
+                <div className="flex items-center gap-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={signatureUrl}
+                    alt="Authorized Signature"
+                    className="h-10 w-24 object-contain rounded border border-slate-200 p-0.5 bg-white"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSignatureUrl("")}
+                    className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 h-7 px-2"
+                  >
+                    Remove Signature
+                  </Button>
+                </div>
+              ) : null}
+              <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-sm">
+                <Upload className="h-3.5 w-3.5" />
+                <span>{signatureUrl ? "Change Signature" : "Upload Signature"}</span>
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp"
+                  className="hidden"
+                  onChange={handleSignatureUpload}
                 />
               </label>
             </div>

@@ -12,6 +12,8 @@ import {
   QrCode,
   ImageIcon,
   Save,
+  PenTool,
+  Stamp,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,6 +41,8 @@ const defaultProfile: Omit<BusinessProfile, "created_at" | "updated_at"> = {
   upi_id: "",
   logo_url: "",
   payment_qr_url: "",
+  signature_url: "",
+  stamp_url: "",
   default_terms: `Payment Terms:
 Payment should be initiated within 15 days of delivery.
 
@@ -55,8 +59,12 @@ export default function SettingsPage() {
   const [saving, setSaving] = React.useState(false);
   const [uploadingLogo, setUploadingLogo] = React.useState(false);
   const [uploadingQR, setUploadingQR] = React.useState(false);
+  const [uploadingSignature, setUploadingSignature] = React.useState(false);
+  const [uploadingStamp, setUploadingStamp] = React.useState(false);
   const [logoPreviewUrl, setLogoPreviewUrl] = React.useState("");
   const [qrPreviewUrl, setQrPreviewUrl] = React.useState("");
+  const [signaturePreviewUrl, setSignaturePreviewUrl] = React.useState("");
+  const [stampPreviewUrl, setStampPreviewUrl] = React.useState("");
   const [profileLoaded, setProfileLoaded] = React.useState(false);
   const [message, setMessage] = React.useState<{ text: string; type: "success" | "error" } | null>(null);
 
@@ -79,10 +87,14 @@ export default function SettingsPage() {
           upi_id: bp.upi_id || "",
           logo_url: bp.logo_url || "",
           payment_qr_url: bp.payment_qr_url || "",
+          signature_url: bp.signature_url || "",
+          stamp_url: bp.stamp_url || "",
           default_terms: bp.default_terms || defaultProfile.default_terms,
         });
         setLogoPreviewUrl(bp.logo_url || "");
         setQrPreviewUrl(bp.payment_qr_url || "");
+        setSignaturePreviewUrl(bp.signature_url || "");
+        setStampPreviewUrl(bp.stamp_url || "");
         setProfileLoaded(true);
       } catch (err) {
         if (active) {
@@ -102,13 +114,20 @@ export default function SettingsPage() {
 
   const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
-    type: "logo" | "qr"
+    type: "logo" | "qr" | "signature" | "stamp"
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
 
-    const setUploading = type === "logo" ? setUploadingLogo : setUploadingQR;
+    const setUploading =
+      type === "logo"
+        ? setUploadingLogo
+        : type === "qr"
+        ? setUploadingQR
+        : type === "signature"
+        ? setUploadingSignature
+        : setUploadingStamp;
 
     try {
       setUploading(true);
@@ -123,22 +142,38 @@ export default function SettingsPage() {
       uploadForm.set("file", file);
       uploadForm.set("type", type);
       const response = await fetch("/api/assets", { method: "POST", body: uploadForm });
-      const result = await response.json() as { data?: { path?: string; url?: string }; error?: string };
-      if (!response.ok || !result.data?.path || !result.data.url) {
+      const result = (await response.json()) as {
+        data?: { id?: string; path?: string; url?: string };
+        error?: string;
+      };
+      const assetUrl = result.data?.url || result.data?.path;
+      if (!response.ok || !assetUrl) {
         throw new Error(result.error || "Image upload failed.");
       }
-      const { path, url } = result.data;
 
       if (type === "logo") {
-        setProfile((prev) => ({ ...prev, logo_url: path }));
-        setLogoPreviewUrl(url);
-      } else {
-        setProfile((prev) => ({ ...prev, payment_qr_url: path }));
-        setQrPreviewUrl(url);
+        setProfile((prev) => ({ ...prev, logo_url: assetUrl }));
+        setLogoPreviewUrl(assetUrl);
+      } else if (type === "qr") {
+        setProfile((prev) => ({ ...prev, payment_qr_url: assetUrl }));
+        setQrPreviewUrl(assetUrl);
+      } else if (type === "signature") {
+        setProfile((prev) => ({ ...prev, signature_url: assetUrl }));
+        setSignaturePreviewUrl(assetUrl);
+      } else if (type === "stamp") {
+        setProfile((prev) => ({ ...prev, stamp_url: assetUrl }));
+        setStampPreviewUrl(assetUrl);
       }
 
+      const labelMap = {
+        logo: "Company Logo",
+        qr: "Payment QR code",
+        signature: "Authorized Signature",
+        stamp: "Company Stamp / Seal",
+      };
+
       setMessage({
-        text: `${type === "logo" ? "Company Logo" : "Payment QR code"} uploaded. Save business settings to apply it.`,
+        text: `${labelMap[type]} uploaded successfully. Click Save Business Settings below to apply it.`,
         type: "success",
       });
     } catch (err: unknown) {
@@ -177,6 +212,8 @@ export default function SettingsPage() {
         upi_id: profile.upi_id?.trim() || null,
         logo_url: profile.logo_url || null,
         payment_qr_url: profile.payment_qr_url || null,
+        signature_url: profile.signature_url || null,
+        stamp_url: profile.stamp_url || null,
         default_terms: profile.default_terms?.trim() || null,
       };
 
@@ -469,17 +506,17 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Section 3: Branding assets */}
+        {/* Section 3: Branding & Official Verification Assets */}
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
             <div className="flex items-center gap-2">
               <ImageIcon className="h-4 w-4 text-[#0b1f3a]" />
               <CardTitle className="text-sm font-semibold text-slate-900">
-                Visual Assets (Logo & Payment QR)
+                Visual Assets (Logo, QR Code, Stamp & Signature)
               </CardTitle>
             </div>
             <CardDescription className="text-xs text-slate-500">
-              Logo and QR images are stored in your private Supabase Storage bucket and used in generated PDFs.
+              Upload company branding and authorized verification assets used on your generated invoice PDFs. Background-less (transparent PNG) images work best for stamps and signatures.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-4 sm:p-6 space-y-6">
@@ -580,6 +617,114 @@ export default function SettingsPage() {
                         className="hidden"
                         onChange={(e) => handleFileUpload(e, "qr")}
                         disabled={uploadingQR}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Company Stamp / Seal Upload */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <Stamp className="h-3.5 w-3.5 text-[#0b1f3a]" />
+                  <Label className="block">Company Stamp / Seal</Label>
+                </div>
+                <div className="border border-dashed border-slate-200 rounded-lg p-4 flex flex-col items-center justify-center text-center bg-slate-50/50 min-h-[140px]">
+                  {stampPreviewUrl ? (
+                    <div className="space-y-2 flex flex-col items-center">
+                      <div className="relative h-20 w-20 border border-slate-200 rounded bg-white p-1 shadow-inner">
+                        <Image
+                          src={stampPreviewUrl}
+                          alt="Stamp Preview"
+                          fill
+                          className="object-contain"
+                          unoptimized
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfile({ ...profile, stamp_url: "" });
+                          setStampPreviewUrl("");
+                        }}
+                        className="text-[11px] text-red-600 hover:underline"
+                      >
+                        Remove Stamp
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 flex flex-col items-center">
+                      <Stamp className="h-8 w-8 text-slate-300" />
+                      <p className="text-xs text-slate-500">
+                        Transparent / background-less PNG recommended
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="mt-3">
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-sm">
+                      <Upload className="h-3.5 w-3.5" />
+                      <span>{uploadingStamp ? "Uploading..." : "Upload Stamp"}</span>
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg, image/webp"
+                        className="hidden"
+                        onChange={(e) => handleFileUpload(e, "stamp")}
+                        disabled={uploadingStamp}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Authorized Signature Upload */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <PenTool className="h-3.5 w-3.5 text-[#0b1f3a]" />
+                  <Label className="block">Authorized Signature</Label>
+                </div>
+                <div className="border border-dashed border-slate-200 rounded-lg p-4 flex flex-col items-center justify-center text-center bg-slate-50/50 min-h-[140px]">
+                  {signaturePreviewUrl ? (
+                    <div className="space-y-2 flex flex-col items-center">
+                      <div className="relative h-16 w-32 border border-slate-200 rounded bg-white p-1 shadow-inner">
+                        <Image
+                          src={signaturePreviewUrl}
+                          alt="Signature Preview"
+                          fill
+                          className="object-contain"
+                          unoptimized
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfile({ ...profile, signature_url: "" });
+                          setSignaturePreviewUrl("");
+                        }}
+                        className="text-[11px] text-red-600 hover:underline"
+                      >
+                        Remove Signature
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 flex flex-col items-center">
+                      <PenTool className="h-8 w-8 text-slate-300" />
+                      <p className="text-xs text-slate-500">
+                        Transparent / background-less PNG recommended
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="mt-3">
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-sm">
+                      <Upload className="h-3.5 w-3.5" />
+                      <span>{uploadingSignature ? "Uploading..." : "Upload Signature"}</span>
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg, image/webp"
+                        className="hidden"
+                        onChange={(e) => handleFileUpload(e, "signature")}
+                        disabled={uploadingSignature}
                       />
                     </label>
                   </div>

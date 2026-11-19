@@ -34,6 +34,8 @@ create table public.business_profiles (
   upi_id text,
   logo_url text,
   payment_qr_url text,
+  signature_url text,
+  stamp_url text,
   default_terms text,
   catalogue_seeded_at timestamptz,
   created_at timestamptz not null default now(),
@@ -125,7 +127,7 @@ create table public.invoice_items (
 create table public.assets (
   id text primary key default gen_random_uuid()::text,
   owner_id text not null default 'abira-staff-admin',
-  type text not null check (type in ('logo', 'qr')),
+  type text not null check (type in ('logo', 'qr', 'signature', 'stamp')),
   object_path text not null unique,
   file_name text not null,
   mime_type text not null check (mime_type in ('image/png', 'image/jpeg', 'image/webp')),

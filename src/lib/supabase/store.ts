@@ -60,6 +60,8 @@ function profileDefaults(ownerId: string = "abira-staff-admin"): BusinessProfile
     upi_id: null,
     logo_url: null,
     payment_qr_url: null,
+    signature_url: null,
+    stamp_url: null,
     default_terms: `Payment Terms:
 Payment should be initiated within 15 days of delivery.
 
@@ -79,7 +81,7 @@ interface MemoryStorage {
   customers: Customer[];
   products: Product[];
   invoices: Invoice[];
-  assets: Array<{ id: string; type: "logo" | "qr"; object_path: string; mime_type: string }>;
+  assets: Array<{ id: string; type: "logo" | "qr" | "signature" | "stamp"; object_path: string; mime_type: string }>;
 }
 
 const memoryStore: MemoryStorage = {
@@ -135,6 +137,8 @@ export async function saveBusinessProfile(context: StoreContext, value: unknown)
     upi_id: optionalText(profile, "upi_id"),
     logo_url: optionalText(profile, "logo_url"),
     payment_qr_url: optionalText(profile, "payment_qr_url"),
+    signature_url: optionalText(profile, "signature_url"),
+    stamp_url: optionalText(profile, "stamp_url"),
     default_terms: optionalText(profile, "default_terms"),
     updated_at: new Date().toISOString(),
   };
@@ -579,7 +583,7 @@ export async function addAsset(
   context: StoreContext,
   asset: {
     id: string;
-    type: "logo" | "qr";
+    type: "logo" | "qr" | "signature" | "stamp";
     object_path: string;
     file_name: string;
     mime_type: string;

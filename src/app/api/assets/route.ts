@@ -25,8 +25,12 @@ export async function POST(request: Request) {
 
     const file = formData.get("file");
     const type = formData.get("type");
-    if (!(file instanceof File) || (type !== "logo" && type !== "qr")) {
-      return NextResponse.json({ error: "Choose an image and specify logo or qr." }, { status: 400 });
+    const allowedTypes = ["logo", "qr", "signature", "stamp"] as const;
+    if (!(file instanceof File) || typeof type !== "string" || !allowedTypes.includes(type as any)) {
+      return NextResponse.json(
+        { error: "Choose an image and specify logo, qr, signature, or stamp." },
+        { status: 400 }
+      );
     }
     if (file.size === 0 || file.size > MAX_BUSINESS_ASSET_SIZE) {
       return NextResponse.json({ error: "Image files must be between 1 byte and 2 MiB." }, { status: 400 });
@@ -62,7 +66,7 @@ export async function POST(request: Request) {
         if (!uploadError) {
           await addAsset(auth.context, {
             id,
-            type,
+            type: type as "logo" | "qr" | "signature" | "stamp",
             object_path: objectPath,
             file_name: fileName,
             mime_type: file.type,
@@ -73,6 +77,7 @@ export async function POST(request: Request) {
               id,
               type,
               url: `/api/assets/${id}`,
+              path: `/api/assets/${id}`,
             },
           });
         }
@@ -87,6 +92,7 @@ export async function POST(request: Request) {
         id,
         type,
         url: dataUrl,
+        path: dataUrl,
       },
     });
   } catch (error) {

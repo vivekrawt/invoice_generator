@@ -23,6 +23,8 @@ export interface BusinessProfile {
   upi_id: string | null;
   logo_url: string | null;
   payment_qr_url: string | null;
+  signature_url: string | null;
+  stamp_url: string | null;
   default_terms: string | null;
   created_at: string;
   updated_at: string;
@@ -104,6 +106,8 @@ export interface BusinessSnapshot {
   upi_id?: string | null;
   logo_url?: string | null;
   payment_qr_url?: string | null;
+  signature_url?: string | null;
+  stamp_url?: string | null;
 }
 
 export interface Invoice {
