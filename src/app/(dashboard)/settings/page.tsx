@@ -14,6 +14,11 @@ import {
   Save,
   PenTool,
   Stamp,
+  FolderCheck,
+  ExternalLink,
+  AlertTriangle,
+  CheckCircle2,
+  CreditCard,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,6 +39,15 @@ const defaultProfile: Omit<BusinessProfile, "created_at" | "updated_at"> = {
   account_number: HARDCODED_BUSINESS_PROFILE.account_number || "",
   ifsc: HARDCODED_BUSINESS_PROFILE.ifsc || "",
   upi_id: HARDCODED_BUSINESS_PROFILE.upi_id || "",
+  account1_label: HARDCODED_BUSINESS_PROFILE.account1_label || "Account 1 (Primary - UP Gramin Bank)",
+  account2_label: HARDCODED_BUSINESS_PROFILE.account2_label || "Account 2 (Secondary)",
+  account2_bank_name: HARDCODED_BUSINESS_PROFILE.account2_bank_name || "",
+  account2_account_number: HARDCODED_BUSINESS_PROFILE.account2_account_number || "",
+  account2_ifsc: HARDCODED_BUSINESS_PROFILE.account2_ifsc || "",
+  account2_bank_account_name: HARDCODED_BUSINESS_PROFILE.account2_bank_account_name || "",
+  account2_upi_id: HARDCODED_BUSINESS_PROFILE.account2_upi_id || "",
+  account2_payment_qr_url: HARDCODED_BUSINESS_PROFILE.account2_payment_qr_url || "",
+  default_payment_account: (HARDCODED_BUSINESS_PROFILE.default_payment_account as any) || "account1",
   logo_url: HARDCODED_BUSINESS_PROFILE.logo_url || "",
   payment_qr_url: HARDCODED_BUSINESS_PROFILE.payment_qr_url || "",
   signature_url: HARDCODED_BUSINESS_PROFILE.signature_url || "",
@@ -46,14 +60,21 @@ export default function SettingsPage() {
   const [saving, setSaving] = React.useState(false);
   const [uploadingLogo, setUploadingLogo] = React.useState(false);
   const [uploadingQR, setUploadingQR] = React.useState(false);
+  const [uploadingAccount2QR, setUploadingAccount2QR] = React.useState(false);
   const [uploadingSignature, setUploadingSignature] = React.useState(false);
   const [uploadingStamp, setUploadingStamp] = React.useState(false);
   const [logoPreviewUrl, setLogoPreviewUrl] = React.useState("");
   const [qrPreviewUrl, setQrPreviewUrl] = React.useState("");
+  const [account2QrPreviewUrl, setAccount2QrPreviewUrl] = React.useState("");
   const [signaturePreviewUrl, setSignaturePreviewUrl] = React.useState("");
   const [stampPreviewUrl, setStampPreviewUrl] = React.useState("");
   const [profileLoaded, setProfileLoaded] = React.useState(false);
   const [message, setMessage] = React.useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [driveStatus, setDriveStatus] = React.useState<{
+    configured: boolean;
+    folderUrl: string | null;
+    clientEmail: string | null;
+  } | null>(null);
 
   React.useEffect(() => {
     let active = true;
@@ -69,6 +90,7 @@ export default function SettingsPage() {
         }));
         if (parsed.logo_url) setLogoPreviewUrl(parsed.logo_url);
         if (parsed.payment_qr_url) setQrPreviewUrl(parsed.payment_qr_url);
+        if (parsed.account2_payment_qr_url) setAccount2QrPreviewUrl(parsed.account2_payment_qr_url);
         if (parsed.signature_url) setSignaturePreviewUrl(parsed.signature_url);
         if (parsed.stamp_url) setStampPreviewUrl(parsed.stamp_url);
         setProfileLoaded(true);
@@ -77,6 +99,20 @@ export default function SettingsPage() {
     } catch {
       // Ignore localStorage errors
     }
+
+    async function loadDriveStatus() {
+      try {
+        const res = await apiRequest<{
+          configured: boolean;
+          folderUrl: string | null;
+          clientEmail: string | null;
+        }>("/api/drive/status");
+        if (active) setDriveStatus(res);
+      } catch (e) {
+        console.warn("Drive status load notice:", e);
+      }
+    }
+    void loadDriveStatus();
 
     async function loadProfile() {
       try {
@@ -105,6 +141,15 @@ export default function SettingsPage() {
           account_number: bp.account_number || cachedParsed.account_number || defaultProfile.account_number,
           ifsc: bp.ifsc || cachedParsed.ifsc || defaultProfile.ifsc,
           upi_id: bp.upi_id || cachedParsed.upi_id || defaultProfile.upi_id,
+          account1_label: bp.account1_label || cachedParsed.account1_label || defaultProfile.account1_label,
+          account2_label: bp.account2_label || cachedParsed.account2_label || defaultProfile.account2_label,
+          account2_bank_name: bp.account2_bank_name ?? cachedParsed.account2_bank_name ?? defaultProfile.account2_bank_name,
+          account2_account_number: bp.account2_account_number ?? cachedParsed.account2_account_number ?? defaultProfile.account2_account_number,
+          account2_ifsc: bp.account2_ifsc ?? cachedParsed.account2_ifsc ?? defaultProfile.account2_ifsc,
+          account2_bank_account_name: bp.account2_bank_account_name ?? cachedParsed.account2_bank_account_name ?? defaultProfile.account2_bank_account_name,
+          account2_upi_id: bp.account2_upi_id ?? cachedParsed.account2_upi_id ?? defaultProfile.account2_upi_id,
+          account2_payment_qr_url: bp.account2_payment_qr_url || cachedParsed.account2_payment_qr_url || defaultProfile.account2_payment_qr_url,
+          default_payment_account: bp.default_payment_account || cachedParsed.default_payment_account || defaultProfile.default_payment_account,
           logo_url: bp.logo_url || cachedParsed.logo_url || defaultProfile.logo_url,
           payment_qr_url: bp.payment_qr_url || cachedParsed.payment_qr_url || defaultProfile.payment_qr_url,
           signature_url: bp.signature_url || cachedParsed.signature_url || defaultProfile.signature_url,
@@ -114,6 +159,7 @@ export default function SettingsPage() {
         setProfile(merged);
         setLogoPreviewUrl(merged.logo_url || "");
         setQrPreviewUrl(merged.payment_qr_url || "");
+        setAccount2QrPreviewUrl(merged.account2_payment_qr_url || "");
         setSignaturePreviewUrl(merged.signature_url || "");
         setStampPreviewUrl(merged.stamp_url || "");
         setProfileLoaded(true);
@@ -144,7 +190,7 @@ export default function SettingsPage() {
 
   const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
-    type: "logo" | "qr" | "signature" | "stamp"
+    type: "logo" | "qr" | "account2_qr" | "signature" | "stamp"
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -155,6 +201,8 @@ export default function SettingsPage() {
         ? setUploadingLogo
         : type === "qr"
         ? setUploadingQR
+        : type === "account2_qr"
+        ? setUploadingAccount2QR
         : type === "signature"
         ? setUploadingSignature
         : setUploadingStamp;
@@ -186,6 +234,10 @@ export default function SettingsPage() {
         setProfile((prev) => ({ ...prev, payment_qr_url: dataUrl }));
         setQrPreviewUrl(dataUrl);
         updatedKey = "payment_qr_url";
+      } else if (type === "account2_qr") {
+        setProfile((prev) => ({ ...prev, account2_payment_qr_url: dataUrl }));
+        setAccount2QrPreviewUrl(dataUrl);
+        updatedKey = "account2_payment_qr_url";
       } else if (type === "signature") {
         setProfile((prev) => ({ ...prev, signature_url: dataUrl }));
         setSignaturePreviewUrl(dataUrl);
@@ -216,7 +268,8 @@ export default function SettingsPage() {
 
       const labelMap = {
         logo: "Company Logo",
-        qr: "Payment QR code",
+        qr: "Account 1 Payment QR code",
+        account2_qr: "Account 2 Payment QR code",
         signature: "Authorized Signature",
         stamp: "Company Stamp / Seal",
       };
@@ -259,6 +312,15 @@ export default function SettingsPage() {
         account_number: profile.account_number?.trim() || HARDCODED_BUSINESS_PROFILE.account_number || null,
         ifsc: profile.ifsc?.trim() ? profile.ifsc.trim().toUpperCase() : (HARDCODED_BUSINESS_PROFILE.ifsc || null),
         upi_id: profile.upi_id?.trim() || HARDCODED_BUSINESS_PROFILE.upi_id || null,
+        account1_label: profile.account1_label?.trim() || HARDCODED_BUSINESS_PROFILE.account1_label || "Account 1 (Primary - UP Gramin Bank)",
+        account2_label: profile.account2_label?.trim() || HARDCODED_BUSINESS_PROFILE.account2_label || "Account 2 (Secondary)",
+        account2_bank_name: profile.account2_bank_name?.trim() || null,
+        account2_account_number: profile.account2_account_number?.trim() || null,
+        account2_ifsc: profile.account2_ifsc?.trim() ? profile.account2_ifsc.trim().toUpperCase() : null,
+        account2_bank_account_name: profile.account2_bank_account_name?.trim() || null,
+        account2_upi_id: profile.account2_upi_id?.trim() || null,
+        account2_payment_qr_url: profile.account2_payment_qr_url || null,
+        default_payment_account: profile.default_payment_account || "account1",
         logo_url: profile.logo_url || HARDCODED_BUSINESS_PROFILE.logo_url || null,
         payment_qr_url: profile.payment_qr_url || HARDCODED_BUSINESS_PROFILE.payment_qr_url || null,
         signature_url: profile.signature_url || HARDCODED_BUSINESS_PROFILE.signature_url || null,
@@ -329,6 +391,53 @@ export default function SettingsPage() {
             In strict compliance with business guidelines, all generated billing documents display solely <strong>INVOICE</strong>. Headings such as &quot;Commercial Invoice&quot;, &quot;Non-GST Invoice&quot;, or &quot;GST Tax Invoice&quot; are strictly disallowed. Unverified tax assumptions are not applied.
           </p>
         </div>
+      </div>
+
+      {/* Google Drive Backup Status Card */}
+      <div
+        className={`p-4 rounded-lg border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs ${
+          driveStatus?.configured
+            ? "bg-emerald-50/70 border-emerald-200 text-emerald-900"
+            : "bg-amber-50/70 border-amber-200 text-amber-900"
+        }`}
+      >
+        <div className="flex items-start gap-3">
+          <FolderCheck
+            className={`h-5 w-5 shrink-0 mt-0.5 ${
+              driveStatus?.configured ? "text-emerald-700" : "text-amber-700"
+            }`}
+          />
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <p className="font-semibold text-sm">
+                Google Drive Automated Backup:{" "}
+                {driveStatus?.configured ? "Connected & Active" : "Pending Configuration"}
+              </p>
+              {driveStatus?.configured && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  <CheckCircle2 className="h-3 w-3 mr-1" /> Ready
+                </span>
+              )}
+            </div>
+            <p className="text-slate-600 text-[11px] leading-relaxed">
+              {driveStatus?.configured
+                ? `Generated invoices are automatically backed up as PDF files into financial year subfolders. Connected via: ${driveStatus.clientEmail || "Service Account"}.`
+                : "To activate automated server-side backup of invoice PDFs to your Google Drive, set GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY, and GOOGLE_DRIVE_FOLDER_ID in environment variables (.env.local / Vercel)."}
+            </p>
+          </div>
+        </div>
+
+        {driveStatus?.folderUrl && (
+          <a
+            href={driveStatus.folderUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#0b1f3a] text-white hover:bg-[#132c50] font-medium text-xs shadow-sm self-start sm:self-auto shrink-0"
+          >
+            <span>Open Invoices Folder</span>
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        )}
       </div>
 
       {/* Feedback Message */}
@@ -479,86 +588,263 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Section 2: Banking & Settlement Details */}
+        {/* Section 2: Multi-Account Banking & Settlement Details */}
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
-            <div className="flex items-center gap-2">
-              <Landmark className="h-4 w-4 text-[#0b1f3a]" />
-              <CardTitle className="text-sm font-semibold text-slate-900">
-                Settlement & Bank Details
-              </CardTitle>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Landmark className="h-4 w-4 text-[#0b1f3a]" />
+                <CardTitle className="text-sm font-semibold text-slate-900">
+                  Payment Receiving Accounts (Multi-Account Setup)
+                </CardTitle>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-500 font-medium">Default for New Invoices:</span>
+                <select
+                  value={profile.default_payment_account || "account1"}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      default_payment_account: e.target.value as "account1" | "account2",
+                    })
+                  }
+                  className="h-7 text-xs border border-slate-200 rounded px-2 bg-white font-medium"
+                >
+                  <option value="account1">{profile.account1_label || "Account 1 (Primary)"}</option>
+                  <option value="account2">{profile.account2_label || "Account 2 (Secondary)"}</option>
+                </select>
+              </div>
             </div>
             <CardDescription className="text-xs text-slate-500">
-              Account details rendered on invoices for B2B bank transfers and payments
+              Configure multiple bank accounts. You can easily switch between them when generating each invoice.
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-4 sm:p-6 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="bank_account_name">Bank Account Name</Label>
-                <Input
-                  id="bank_account_name"
-                  placeholder="e.g. ABIRA Enterprises"
-                  value={profile.bank_account_name || ""}
-                  onChange={(e) =>
-                    setProfile({ ...profile, bank_account_name: e.target.value })
-                  }
-                  className="text-xs"
-                />
+          <CardContent className="p-4 sm:p-6 space-y-6">
+            {/* Account 1 (Primary) */}
+            <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/40 space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-emerald-600" />
+                  <span className="font-semibold text-xs text-slate-900">Account 1 (Primary Account)</span>
+                </div>
+                <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  Primary Hardcoded Base
+                </span>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="bank_name">Bank Name</Label>
-                <Input
-                  id="bank_name"
-                  placeholder="e.g. HDFC Bank / ICICI Bank"
-                  value={profile.bank_name || ""}
-                  onChange={(e) =>
-                    setProfile({ ...profile, bank_name: e.target.value })
-                  }
-                  className="text-xs"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="account1_label">Account Display Label</Label>
+                  <Input
+                    id="account1_label"
+                    value={profile.account1_label || ""}
+                    onChange={(e) => setProfile({ ...profile, account1_label: e.target.value })}
+                    placeholder="e.g. Account 1 (UP Gramin Bank - Dheerendra Singh)"
+                    className="text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="bank_account_name">Bank Account Holder Name</Label>
+                  <Input
+                    id="bank_account_name"
+                    value={profile.bank_account_name || ""}
+                    onChange={(e) => setProfile({ ...profile, bank_account_name: e.target.value })}
+                    className="text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="bank_name">Bank Name</Label>
+                  <Input
+                    id="bank_name"
+                    value={profile.bank_name || ""}
+                    onChange={(e) => setProfile({ ...profile, bank_name: e.target.value })}
+                    className="text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="account_number">Account Number</Label>
+                  <Input
+                    id="account_number"
+                    value={profile.account_number || ""}
+                    onChange={(e) => setProfile({ ...profile, account_number: e.target.value })}
+                    className="text-xs font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="ifsc">IFSC Code</Label>
+                  <Input
+                    id="ifsc"
+                    value={profile.ifsc || ""}
+                    onChange={(e) => setProfile({ ...profile, ifsc: e.target.value })}
+                    className="text-xs font-mono uppercase"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="upi_id">UPI ID / VPA</Label>
+                  <Input
+                    id="upi_id"
+                    placeholder="e.g. 8882511472@upi"
+                    value={profile.upi_id || ""}
+                    onChange={(e) => setProfile({ ...profile, upi_id: e.target.value })}
+                    className="text-xs font-mono"
+                  />
+                </div>
+
+                {/* Account 1 QR */}
+                <div className="space-y-1.5">
+                  <Label>Account 1 Payment QR Code</Label>
+                  <div className="flex items-center gap-3">
+                    {qrPreviewUrl ? (
+                      <div className="relative h-14 w-14 border border-slate-200 rounded bg-white p-1 shrink-0">
+                        <Image src={qrPreviewUrl} alt="QR 1" fill className="object-contain" unoptimized />
+                      </div>
+                    ) : (
+                      <div className="h-14 w-14 border border-dashed border-slate-200 rounded flex items-center justify-center bg-white shrink-0">
+                        <QrCode className="h-6 w-6 text-slate-300" />
+                      </div>
+                    )}
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-sm">
+                      <Upload className="h-3.5 w-3.5" />
+                      <span>{uploadingQR ? "Uploading..." : "Upload QR 1"}</span>
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg, image/webp"
+                        className="hidden"
+                        onChange={(e) => handleFileUpload(e, "qr")}
+                        disabled={uploadingQR}
+                      />
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="account_number">Account Number</Label>
-                <Input
-                  id="account_number"
-                  placeholder="e.g. 50200012345678"
-                  value={profile.account_number || ""}
-                  onChange={(e) =>
-                    setProfile({ ...profile, account_number: e.target.value })
-                  }
-                  className="text-xs font-mono"
-                />
+            {/* Account 2 (Secondary) */}
+            <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/40 space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-blue-600" />
+                  <span className="font-semibold text-xs text-slate-900">Account 2 (Secondary Account)</span>
+                </div>
+                <span className="text-[11px] font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                  Configurable Account
+                </span>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="ifsc">IFSC Code</Label>
-                <Input
-                  id="ifsc"
-                  placeholder="e.g. HDFC0001234"
-                  value={profile.ifsc || ""}
-                  onChange={(e) =>
-                    setProfile({ ...profile, ifsc: e.target.value })
-                  }
-                  className="text-xs font-mono uppercase"
-                />
-              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="account2_label">Account Display Label</Label>
+                  <Input
+                    id="account2_label"
+                    value={profile.account2_label || ""}
+                    onChange={(e) => setProfile({ ...profile, account2_label: e.target.value })}
+                    placeholder="e.g. Account 2 (HDFC / ICICI Bank)"
+                    className="text-xs"
+                  />
+                </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="upi_id">UPI ID / VPA</Label>
-                <Input
-                  id="upi_id"
-                  placeholder="e.g. abiraenterprises@hdfcbank"
-                  value={profile.upi_id || ""}
-                  onChange={(e) =>
-                    setProfile({ ...profile, upi_id: e.target.value })
-                  }
-                  className="text-xs font-mono"
-                />
+                <div className="space-y-1.5">
+                  <Label htmlFor="account2_bank_account_name">Bank Account Holder Name</Label>
+                  <Input
+                    id="account2_bank_account_name"
+                    placeholder="e.g. ABIRA Enterprises"
+                    value={profile.account2_bank_account_name || ""}
+                    onChange={(e) => setProfile({ ...profile, account2_bank_account_name: e.target.value })}
+                    className="text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="account2_bank_name">Bank Name</Label>
+                  <Input
+                    id="account2_bank_name"
+                    placeholder="e.g. HDFC Bank"
+                    value={profile.account2_bank_name || ""}
+                    onChange={(e) => setProfile({ ...profile, account2_bank_name: e.target.value })}
+                    className="text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="account2_account_number">Account Number</Label>
+                  <Input
+                    id="account2_account_number"
+                    placeholder="e.g. 50200012345678"
+                    value={profile.account2_account_number || ""}
+                    onChange={(e) => setProfile({ ...profile, account2_account_number: e.target.value })}
+                    className="text-xs font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="account2_ifsc">IFSC Code</Label>
+                  <Input
+                    id="account2_ifsc"
+                    placeholder="e.g. HDFC0001234"
+                    value={profile.account2_ifsc || ""}
+                    onChange={(e) => setProfile({ ...profile, account2_ifsc: e.target.value })}
+                    className="text-xs font-mono uppercase"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="account2_upi_id">UPI ID / VPA</Label>
+                  <Input
+                    id="account2_upi_id"
+                    placeholder="e.g. abira@hdfcbank"
+                    value={profile.account2_upi_id || ""}
+                    onChange={(e) => setProfile({ ...profile, account2_upi_id: e.target.value })}
+                    className="text-xs font-mono"
+                  />
+                </div>
+
+                {/* Account 2 QR */}
+                <div className="space-y-1.5">
+                  <Label>Account 2 Payment QR Code</Label>
+                  <div className="flex items-center gap-3">
+                    {account2QrPreviewUrl ? (
+                      <div className="relative h-14 w-14 border border-slate-200 rounded bg-white p-1 shrink-0">
+                        <Image src={account2QrPreviewUrl} alt="QR 2" fill className="object-contain" unoptimized />
+                      </div>
+                    ) : (
+                      <div className="h-14 w-14 border border-dashed border-slate-200 rounded flex items-center justify-center bg-white shrink-0">
+                        <QrCode className="h-6 w-6 text-slate-300" />
+                      </div>
+                    )}
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-sm">
+                      <Upload className="h-3.5 w-3.5" />
+                      <span>{uploadingAccount2QR ? "Uploading..." : "Upload QR 2"}</span>
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg, image/webp"
+                        className="hidden"
+                        onChange={(e) => handleFileUpload(e, "account2_qr")}
+                        disabled={uploadingAccount2QR}
+                      />
+                    </label>
+                    {account2QrPreviewUrl && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = { ...profile, account2_payment_qr_url: "" };
+                          setProfile(updated);
+                          setAccount2QrPreviewUrl("");
+                          try {
+                            localStorage.setItem("abira_business_profile", JSON.stringify(updated));
+                          } catch {}
+                        }}
+                        className="text-[11px] text-red-600 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -570,7 +856,7 @@ export default function SettingsPage() {
             <div className="flex items-center gap-2">
               <ImageIcon className="h-4 w-4 text-[#0b1f3a]" />
               <CardTitle className="text-sm font-semibold text-slate-900">
-                Visual Assets (Logo, QR Code, Stamp & Signature)
+                Visual Assets (Logo, Stamp & Signature)
               </CardTitle>
             </div>
             <CardDescription className="text-xs text-slate-500">
@@ -578,7 +864,7 @@ export default function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-4 sm:p-6 space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               {/* Logo Upload */}
               <div className="space-y-2">
                 <Label className="block">Company Logo</Label>
@@ -628,61 +914,6 @@ export default function SettingsPage() {
                         className="hidden"
                         onChange={(e) => handleFileUpload(e, "logo")}
                         disabled={uploadingLogo}
-                      />
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Payment QR Upload */}
-              <div className="space-y-2">
-                <Label className="block">Payment QR Code</Label>
-                <div className="border border-dashed border-slate-200 rounded-lg p-4 flex flex-col items-center justify-center text-center bg-slate-50/50 min-h-[140px]">
-                  {qrPreviewUrl ? (
-                    <div className="space-y-2 flex flex-col items-center">
-                      <div className="relative h-20 w-20 border border-slate-200 rounded bg-white p-1">
-                        <Image
-                          src={qrPreviewUrl}
-                          alt="QR Preview"
-                          fill
-                          className="object-contain"
-                          unoptimized
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const updated = { ...profile, payment_qr_url: "" };
-                          setProfile(updated);
-                          setQrPreviewUrl("");
-                          try {
-                            localStorage.setItem("abira_business_profile", JSON.stringify(updated));
-                          } catch {}
-                        }}
-                        className="text-[11px] text-red-600 hover:underline"
-                      >
-                        Remove QR Code
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5 flex flex-col items-center">
-                      <QrCode className="h-8 w-8 text-slate-300" />
-                      <p className="text-xs text-slate-500">
-                        Square QR image for UPI / Instant Pay
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="mt-3">
-                    <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-sm">
-                      <Upload className="h-3.5 w-3.5" />
-                      <span>{uploadingQR ? "Uploading..." : "Upload QR Code"}</span>
-                      <input
-                        type="file"
-                        accept="image/png, image/jpeg, image/webp"
-                        className="hidden"
-                        onChange={(e) => handleFileUpload(e, "qr")}
-                        disabled={uploadingQR}
                       />
                     </label>
                   </div>

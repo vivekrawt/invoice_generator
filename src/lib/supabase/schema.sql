@@ -32,6 +32,15 @@ create table public.business_profiles (
   account_number text,
   ifsc text,
   upi_id text,
+  account1_label text default 'Account 1 (Primary)',
+  account2_label text default 'Account 2 (Secondary)',
+  account2_bank_name text,
+  account2_account_number text,
+  account2_ifsc text,
+  account2_bank_account_name text,
+  account2_upi_id text,
+  account2_payment_qr_url text,
+  default_payment_account text default 'account1',
   logo_url text,
   payment_qr_url text,
   signature_url text,
@@ -99,6 +108,9 @@ create table public.invoices (
   amount_in_words text not null,
   terms text,
   additional_notes text,
+  drive_file_id text,
+  drive_file_url text,
+  drive_synced_at timestamptz,
   created_by text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -339,3 +351,20 @@ insert into public.products (category, product_name, description) values
 ('CONFETTI', 'Brand-Coloured Confetti', 'Pantone-matched bespoke confetti tailored to corporate color schemes.'),
 ('CONFETTI', 'Company-Themed Confetti', 'Custom-shaped celebratory confetti featuring company motif elements.')
 on conflict (product_name) do nothing;
+
+-- ==============================================================================
+-- 11. SAFE COLUMN MIGRATIONS (For existing databases)
+-- ==============================================================================
+alter table public.business_profiles add column if not exists account1_label text default 'Account 1 (Primary)';
+alter table public.business_profiles add column if not exists account2_label text default 'Account 2 (Secondary)';
+alter table public.business_profiles add column if not exists account2_bank_name text;
+alter table public.business_profiles add column if not exists account2_account_number text;
+alter table public.business_profiles add column if not exists account2_ifsc text;
+alter table public.business_profiles add column if not exists account2_bank_account_name text;
+alter table public.business_profiles add column if not exists account2_upi_id text;
+alter table public.business_profiles add column if not exists account2_payment_qr_url text;
+alter table public.business_profiles add column if not exists default_payment_account text default 'account1';
+
+alter table public.invoices add column if not exists drive_file_id text;
+alter table public.invoices add column if not exists drive_file_url text;
+alter table public.invoices add column if not exists drive_synced_at timestamptz;

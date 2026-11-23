@@ -450,17 +450,22 @@ function resolvePdfImageUrl(url: string | null | undefined): string | null {
 
 export function InvoicePDFDocument({ invoice }: { invoice: Invoice }) {
   const rawB = invoice.business_snapshot || {};
+  const isAccount2 = rawB.selected_account === "account2";
+
   const b = {
     ...HARDCODED_BUSINESS_PROFILE,
     ...rawB,
     business_name: rawB.business_name || HARDCODED_BUSINESS_PROFILE.business_name,
     address: rawB.address || HARDCODED_BUSINESS_PROFILE.address,
     phone: rawB.phone || HARDCODED_BUSINESS_PROFILE.phone,
-    bank_account_name: rawB.bank_account_name || HARDCODED_BUSINESS_PROFILE.bank_account_name,
-    bank_name: rawB.bank_name || HARDCODED_BUSINESS_PROFILE.bank_name,
-    account_number: rawB.account_number || HARDCODED_BUSINESS_PROFILE.account_number,
-    ifsc: rawB.ifsc || HARDCODED_BUSINESS_PROFILE.ifsc,
-    payment_qr_url: rawB.payment_qr_url || HARDCODED_BUSINESS_PROFILE.payment_qr_url,
+    email: rawB.email || HARDCODED_BUSINESS_PROFILE.email,
+    pan: rawB.pan || HARDCODED_BUSINESS_PROFILE.pan,
+    bank_account_name: rawB.bank_account_name || (isAccount2 ? "" : HARDCODED_BUSINESS_PROFILE.bank_account_name),
+    bank_name: rawB.bank_name || (isAccount2 ? "" : HARDCODED_BUSINESS_PROFILE.bank_name),
+    account_number: rawB.account_number || (isAccount2 ? "" : HARDCODED_BUSINESS_PROFILE.account_number),
+    ifsc: rawB.ifsc || (isAccount2 ? "" : HARDCODED_BUSINESS_PROFILE.ifsc),
+    upi_id: rawB.upi_id || (isAccount2 ? "" : HARDCODED_BUSINESS_PROFILE.upi_id),
+    payment_qr_url: rawB.payment_qr_url || (isAccount2 ? "" : HARDCODED_BUSINESS_PROFILE.payment_qr_url),
     stamp_url: rawB.stamp_url || HARDCODED_BUSINESS_PROFILE.stamp_url,
     signature_url: rawB.signature_url || HARDCODED_BUSINESS_PROFILE.signature_url,
   };

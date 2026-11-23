@@ -141,6 +141,15 @@ export async function getBusinessProfile({ supabase }: StoreContext): Promise<Bu
           account_number: row.account_number || profile.account_number,
           ifsc: row.ifsc || profile.ifsc,
           upi_id: row.upi_id ?? profile.upi_id,
+          account1_label: row.account1_label || profile.account1_label || HARDCODED_BUSINESS_PROFILE.account1_label,
+          account2_label: row.account2_label || profile.account2_label || HARDCODED_BUSINESS_PROFILE.account2_label,
+          account2_bank_name: row.account2_bank_name ?? profile.account2_bank_name ?? "",
+          account2_account_number: row.account2_account_number ?? profile.account2_account_number ?? "",
+          account2_ifsc: row.account2_ifsc ?? profile.account2_ifsc ?? "",
+          account2_bank_account_name: row.account2_bank_account_name ?? profile.account2_bank_account_name ?? "",
+          account2_upi_id: row.account2_upi_id ?? profile.account2_upi_id ?? null,
+          account2_payment_qr_url: row.account2_payment_qr_url ?? profile.account2_payment_qr_url ?? null,
+          default_payment_account: (row.default_payment_account as any) || profile.default_payment_account || "account1",
           logo_url: row.logo_url ?? profile.logo_url,
           payment_qr_url: row.payment_qr_url || profile.payment_qr_url,
           signature_url: row.signature_url || profile.signature_url,
@@ -172,6 +181,15 @@ export async function saveBusinessProfile(context: StoreContext, value: unknown)
     account_number: optionalText(profile, "account_number") || HARDCODED_BUSINESS_PROFILE.account_number,
     ifsc: optionalText(profile, "ifsc")?.toUpperCase() ?? HARDCODED_BUSINESS_PROFILE.ifsc,
     upi_id: optionalText(profile, "upi_id") || HARDCODED_BUSINESS_PROFILE.upi_id,
+    account1_label: optionalText(profile, "account1_label") || HARDCODED_BUSINESS_PROFILE.account1_label,
+    account2_label: optionalText(profile, "account2_label") || HARDCODED_BUSINESS_PROFILE.account2_label,
+    account2_bank_name: optionalText(profile, "account2_bank_name") ?? "",
+    account2_account_number: optionalText(profile, "account2_account_number") ?? "",
+    account2_ifsc: optionalText(profile, "account2_ifsc")?.toUpperCase() ?? "",
+    account2_bank_account_name: optionalText(profile, "account2_bank_account_name") ?? "",
+    account2_upi_id: optionalText(profile, "account2_upi_id") || null,
+    account2_payment_qr_url: optionalText(profile, "account2_payment_qr_url") || null,
+    default_payment_account: (optionalText(profile, "default_payment_account") as "account1" | "account2") || "account1",
     logo_url: optionalText(profile, "logo_url") || HARDCODED_BUSINESS_PROFILE.logo_url,
     payment_qr_url: optionalText(profile, "payment_qr_url") || HARDCODED_BUSINESS_PROFILE.payment_qr_url,
     signature_url: optionalText(profile, "signature_url") || HARDCODED_BUSINESS_PROFILE.signature_url,
@@ -495,6 +513,7 @@ export async function saveInvoice(
     created_at: timestamp,
   }));
 
+  const existingInv = invoiceId ? memoryStore.invoices.find((inv) => inv.id === invoiceId) : undefined;
   const fullInvoice: Invoice = {
     id,
     invoice_number: invoice.invoice_number,
@@ -515,6 +534,9 @@ export async function saveInvoice(
     amount_in_words: invoice.amount_in_words,
     terms: invoice.terms || null,
     additional_notes: invoice.additional_notes || null,
+    drive_file_id: (invoice as any).drive_file_id || existingInv?.drive_file_id || null,
+    drive_file_url: (invoice as any).drive_file_url || existingInv?.drive_file_url || null,
+    drive_synced_at: (invoice as any).drive_synced_at || existingInv?.drive_synced_at || null,
     created_at: timestamp,
     updated_at: timestamp,
     items: formattedItems,
@@ -594,6 +616,36 @@ export async function deleteInvoice({ supabase, user }: StoreContext, id: string
       console.warn("Supabase deleteInvoice notice:", e);
     }
   }
+}
+
+export async function updateInvoiceDriveUrl(
+  context: StoreContext,
+  invoiceId: string,
+  driveFileId: string,
+  driveFileUrl: string
+): Promise<Invoice> {
+  const timestamp = new Date().toISOString();
+  const inv = memoryStore.invoices.find((i) => i.id === invoiceId);
+  if (inv) {
+    inv.drive_file_id = driveFileId;
+    inv.drive_file_url = driveFileUrl;
+    inv.drive_synced_at = timestamp;
+  }
+  if (context.supabase) {
+    try {
+      await context.supabase
+        .from("invoices")
+        .update({
+          drive_file_id: driveFileId,
+          drive_file_url: driveFileUrl,
+          drive_synced_at: timestamp,
+        } as any)
+        .eq("id", invoiceId);
+    } catch (e) {
+      console.warn("Supabase updateInvoiceDriveUrl notice:", e);
+    }
+  }
+  return inv || getInvoice(context, invoiceId);
 }
 
 // DASHBOARD

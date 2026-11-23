@@ -11,7 +11,11 @@ import {
   Plus,
   Search,
   Trash2,
+  ExternalLink,
+  CloudUpload,
+  CheckCircle2,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { InvoicePDFActions } from "@/components/invoices/invoice-pdf-actions";
-import { apiRequest } from "@/lib/api-client";
+import { apiRequest, jsonBody } from "@/lib/api-client";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Invoice } from "@/types/database.types";
 
@@ -44,6 +48,15 @@ export default function InvoicesPage() {
   const [deleting, setDeleting] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
+  const [driveStatus, setDriveStatus] = React.useState<{
+    isConfigured: boolean;
+    folderUrl?: string;
+    clientEmail?: string;
+  } | null>(null);
+  const [syncingInvoiceId, setSyncingInvoiceId] = React.useState<string | null>(null);
+  const [bulkSyncing, setBulkSyncing] = React.useState(false);
+  const [syncSuccessMessage, setSyncSuccessMessage] = React.useState<string | null>(null);
+
   const loadInvoices = React.useCallback(async () => {
     setLoading(true);
     setErrorMessage(null);
@@ -59,7 +72,60 @@ export default function InvoicesPage() {
 
   React.useEffect(() => {
     void loadInvoices();
+    apiRequest<{ isConfigured: boolean; folderUrl?: string; clientEmail?: string }>("/api/drive/status")
+      .then((status) => setDriveStatus(status))
+      .catch(() => setDriveStatus(null));
   }, [loadInvoices]);
+
+  const syncInvoiceToDrive = async (invId: string) => {
+    setSyncingInvoiceId(invId);
+    setErrorMessage(null);
+    try {
+      const res = await apiRequest<{ success: boolean; webViewLink?: string; error?: string }>("/api/drive/upload", {
+        method: "POST",
+        body: jsonBody({ invoiceId: invId }),
+      });
+      if (res?.success && res?.webViewLink) {
+        setInvoices((prev) =>
+          prev.map((inv) =>
+            inv.id === invId
+              ? { ...inv, drive_file_url: res.webViewLink, drive_synced_at: new Date().toISOString() }
+              : inv
+          )
+        );
+        setSyncSuccessMessage("Invoice uploaded to Google Drive successfully.");
+        setTimeout(() => setSyncSuccessMessage(null), 4000);
+      }
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? `Drive upload failed: ${err.message}` : "Drive upload failed.");
+    } finally {
+      setSyncingInvoiceId(null);
+    }
+  };
+
+  const handleBulkSync = async () => {
+    setBulkSyncing(true);
+    setErrorMessage(null);
+    try {
+      const res = await apiRequest<{ success: boolean; uploadedCount: number; errors?: any[] }>("/api/drive/bulk-sync", {
+        method: "POST",
+      });
+      if (res?.success) {
+        setSyncSuccessMessage(`Successfully backed up ${res.uploadedCount} invoices to Google Drive.`);
+        setTimeout(() => setSyncSuccessMessage(null), 4000);
+        await loadInvoices();
+      }
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? `Bulk sync failed: ${err.message}` : "Bulk sync failed.");
+    } finally {
+      setBulkSyncing(false);
+    }
+  };
+
+  const unbackedInvoicesCount = React.useMemo(
+    () => invoices.filter((inv) => !inv.drive_file_url).length,
+    [invoices]
+  );
 
   const financialYears = React.useMemo(
     () => [...new Set(invoices.map((invoice) => invoice.financial_year).filter(Boolean))].sort().reverse(),
@@ -116,13 +182,49 @@ export default function InvoicesPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">All Invoices</h1>
           <p className="mt-1 text-xs text-slate-500">Search, filter, and manage saved invoice records.</p>
         </div>
-        <Link href="/invoices/new">
-          <Button size="sm" className="gap-1.5 bg-[#0b1f3a] text-xs hover:bg-[#132c50]">
-            <Plus className="h-3.5 w-3.5" />
-            Create Invoice
-          </Button>
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {driveStatus?.isConfigured && driveStatus?.folderUrl && (
+            <a
+              href={driveStatus.folderUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm transition-colors"
+            >
+              <ExternalLink className="h-3.5 w-3.5 text-[#0b1f3a]" />
+              Open Drive Folder
+            </a>
+          )}
+          {driveStatus?.isConfigured && unbackedInvoicesCount > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBulkSync}
+              disabled={bulkSyncing}
+              className="text-xs gap-1.5 border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+            >
+              {bulkSyncing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CloudUpload className="h-3.5 w-3.5 text-emerald-700" />
+              )}
+              <span>{bulkSyncing ? "Syncing..." : `Sync All to Drive (${unbackedInvoicesCount})`}</span>
+            </Button>
+          )}
+          <Link href="/invoices/new">
+            <Button size="sm" className="gap-1.5 bg-[#0b1f3a] text-xs hover:bg-[#132c50]">
+              <Plus className="h-3.5 w-3.5" />
+              Create Invoice
+            </Button>
+          </Link>
+        </div>
       </div>
+
+      {syncSuccessMessage && (
+        <div role="status" className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>{syncSuccessMessage}</span>
+        </div>
+      )}
 
       {errorMessage && (
         <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -205,7 +307,39 @@ export default function InvoicesPage() {
                 <TableBody>
                   {pageInvoices.map((invoice) => (
                     <TableRow key={invoice.id}>
-                      <TableCell className="whitespace-nowrap font-mono text-xs font-semibold">{invoice.invoice_number}</TableCell>
+                      <TableCell className="whitespace-nowrap font-mono text-xs font-semibold">
+                        <div className="flex items-center gap-1.5">
+                          {invoice.drive_file_url ? (
+                            <a
+                              href={invoice.drive_file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-700 hover:text-blue-900 hover:underline inline-flex items-center gap-1 group"
+                              title="Open PDF directly in Google Drive"
+                            >
+                              <span>{invoice.invoice_number}</span>
+                              <ExternalLink className="h-3 w-3 opacity-60 group-hover:opacity-100" />
+                            </a>
+                          ) : (
+                            <span>{invoice.invoice_number}</span>
+                          )}
+                          {invoice.drive_file_url ? (
+                            <span
+                              className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              title="Backed up to Google Drive"
+                            >
+                              Drive
+                            </span>
+                          ) : driveStatus?.isConfigured ? (
+                            <span
+                              className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200"
+                              title="Not backed up to Drive yet"
+                            >
+                              Unsynced
+                            </span>
+                          ) : null}
+                        </div>
+                      </TableCell>
                       <TableCell className="whitespace-nowrap text-xs">{formatDate(invoice.invoice_date)}</TableCell>
                       <TableCell className="min-w-[160px] text-xs">
                         {invoice.customer_snapshot?.customer_name || invoice.customer_name}
@@ -219,6 +353,39 @@ export default function InvoicesPage() {
                       <TableCell>
                         <div className="flex flex-wrap items-center justify-end gap-1">
                           <InvoicePDFActions invoice={invoice} size="sm" />
+                          {invoice.drive_file_url ? (
+                            <a
+                              href={invoice.drive_file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={`Open ${invoice.invoice_number} in Google Drive`}
+                            >
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8 text-emerald-700 hover:bg-emerald-50"
+                                title="Open in Google Drive"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </Button>
+                            </a>
+                          ) : driveStatus?.isConfigured ? (
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8 text-slate-600 hover:text-blue-700 hover:bg-blue-50"
+                              title="Backup PDF to Google Drive"
+                              aria-label={`Backup ${invoice.invoice_number} to Google Drive`}
+                              disabled={syncingInvoiceId === invoice.id}
+                              onClick={() => syncInvoiceToDrive(invoice.id)}
+                            >
+                              {syncingInvoiceId === invoice.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <CloudUpload className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          ) : null}
                           <Link href={`/invoices/${invoice.id}/edit`} aria-label={`Edit ${invoice.invoice_number}`}>
                             <Button variant="outline" size="icon" className="h-8 w-8" title="Edit invoice">
                               <Pencil className="h-3.5 w-3.5" />

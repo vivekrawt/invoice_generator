@@ -21,8 +21,23 @@ export interface BusinessProfile {
   account_number: string | null;
   ifsc: string | null;
   upi_id: string | null;
-  logo_url: string | null;
   payment_qr_url: string | null;
+  account1_label?: string | null;
+  account1_bank_account_name?: string | null;
+  account1_bank_name?: string | null;
+  account1_account_number?: string | null;
+  account1_ifsc?: string | null;
+  account1_upi_id?: string | null;
+  account1_payment_qr_url?: string | null;
+  account2_label?: string | null;
+  account2_bank_account_name?: string | null;
+  account2_bank_name?: string | null;
+  account2_account_number?: string | null;
+  account2_ifsc?: string | null;
+  account2_upi_id?: string | null;
+  account2_payment_qr_url?: string | null;
+  default_payment_account?: "account1" | "account2" | null;
+  logo_url: string | null;
   signature_url: string | null;
   stamp_url: string | null;
   default_terms: string | null;
@@ -108,6 +123,8 @@ export interface BusinessSnapshot {
   payment_qr_url?: string | null;
   signature_url?: string | null;
   stamp_url?: string | null;
+  selected_account?: "account1" | "account2" | null;
+  account_label?: string | null;
 }
 
 export interface Invoice {
@@ -130,6 +147,9 @@ export interface Invoice {
   amount_in_words: string;
   terms: string | null;
   additional_notes: string | null;
+  drive_file_id?: string | null;
+  drive_file_url?: string | null;
+  drive_synced_at?: string | null;
   created_by?: string | null;
   created_at: string;
   updated_at: string;

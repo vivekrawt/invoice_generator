@@ -19,6 +19,9 @@ import {
   Upload,
   PenTool,
   Stamp,
+  Check,
+  ExternalLink,
+  Building2,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -116,6 +119,11 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
   const [businessProfile, setBusinessProfile] = React.useState<BusinessProfile>(
     HARDCODED_BUSINESS_PROFILE as unknown as BusinessProfile
   );
+  const [selectedAccount, setSelectedAccount] = React.useState<"account1" | "account2">(
+    (HARDCODED_BUSINESS_PROFILE.default_payment_account as "account1" | "account2") || "account1"
+  );
+  const [driveUploading, setDriveUploading] = React.useState(false);
+
   const [bankAccountName, setBankAccountName] = React.useState<string>(
     HARDCODED_BUSINESS_PROFILE.bank_account_name || ""
   );
@@ -140,6 +148,25 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
   const [signatureUrl, setSignatureUrl] = React.useState<string>(
     HARDCODED_BUSINESS_PROFILE.signature_url || ""
   );
+
+  const handleAccountSelect = (acc: "account1" | "account2") => {
+    setSelectedAccount(acc);
+    if (acc === "account1") {
+      setBankAccountName(businessProfile.account1_bank_account_name || businessProfile.bank_account_name || HARDCODED_BUSINESS_PROFILE.bank_account_name || "");
+      setBankName(businessProfile.account1_bank_name || businessProfile.bank_name || HARDCODED_BUSINESS_PROFILE.bank_name || "");
+      setAccountNumber(businessProfile.account1_account_number || businessProfile.account_number || HARDCODED_BUSINESS_PROFILE.account_number || "");
+      setIfsc(businessProfile.account1_ifsc || businessProfile.ifsc || HARDCODED_BUSINESS_PROFILE.ifsc || "");
+      setUpiId(businessProfile.account1_upi_id || businessProfile.upi_id || HARDCODED_BUSINESS_PROFILE.upi_id || "");
+      setPaymentQrUrl(businessProfile.account1_payment_qr_url || businessProfile.payment_qr_url || HARDCODED_BUSINESS_PROFILE.payment_qr_url || "");
+    } else {
+      setBankAccountName(businessProfile.account2_bank_account_name || HARDCODED_BUSINESS_PROFILE.account2_bank_account_name || "");
+      setBankName(businessProfile.account2_bank_name || HARDCODED_BUSINESS_PROFILE.account2_bank_name || "");
+      setAccountNumber(businessProfile.account2_account_number || HARDCODED_BUSINESS_PROFILE.account2_account_number || "");
+      setIfsc(businessProfile.account2_ifsc || HARDCODED_BUSINESS_PROFILE.account2_ifsc || "");
+      setUpiId(businessProfile.account2_upi_id || HARDCODED_BUSINESS_PROFILE.account2_upi_id || "");
+      setPaymentQrUrl(businessProfile.account2_payment_qr_url || HARDCODED_BUSINESS_PROFILE.account2_payment_qr_url || "");
+    }
+  };
 
   const handleQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -270,6 +297,7 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
             created_at: source.created_at,
             updated_at: source.updated_at,
           });
+          setSelectedAccount(business.selected_account === "account2" ? "account2" : "account1");
           if (business.bank_account_name) setBankAccountName(business.bank_account_name);
           if (business.bank_name) setBankName(business.bank_name);
           if (business.account_number) setAccountNumber(business.account_number);
@@ -289,12 +317,23 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
             localCachedProfile = JSON.parse(cached) as BusinessProfile;
             setBusinessProfile(localCachedProfile);
             if (localCachedProfile.default_terms) setTerms(localCachedProfile.default_terms);
-            if (localCachedProfile.bank_account_name) setBankAccountName(localCachedProfile.bank_account_name);
-            if (localCachedProfile.bank_name) setBankName(localCachedProfile.bank_name);
-            if (localCachedProfile.account_number) setAccountNumber(localCachedProfile.account_number);
-            if (localCachedProfile.ifsc) setIfsc(localCachedProfile.ifsc);
-            if (localCachedProfile.upi_id) setUpiId(localCachedProfile.upi_id);
-            if (localCachedProfile.payment_qr_url) setPaymentQrUrl(localCachedProfile.payment_qr_url);
+            const cachedDefAcc = (localCachedProfile.default_payment_account as "account1" | "account2") || "account1";
+            setSelectedAccount(cachedDefAcc);
+            if (cachedDefAcc === "account2") {
+              if (localCachedProfile.account2_bank_account_name) setBankAccountName(localCachedProfile.account2_bank_account_name);
+              if (localCachedProfile.account2_bank_name) setBankName(localCachedProfile.account2_bank_name);
+              if (localCachedProfile.account2_account_number) setAccountNumber(localCachedProfile.account2_account_number);
+              if (localCachedProfile.account2_ifsc) setIfsc(localCachedProfile.account2_ifsc);
+              if (localCachedProfile.account2_upi_id) setUpiId(localCachedProfile.account2_upi_id);
+              if (localCachedProfile.account2_payment_qr_url) setPaymentQrUrl(localCachedProfile.account2_payment_qr_url);
+            } else {
+              if (localCachedProfile.bank_account_name) setBankAccountName(localCachedProfile.bank_account_name);
+              if (localCachedProfile.bank_name) setBankName(localCachedProfile.bank_name);
+              if (localCachedProfile.account_number) setAccountNumber(localCachedProfile.account_number);
+              if (localCachedProfile.ifsc) setIfsc(localCachedProfile.ifsc);
+              if (localCachedProfile.upi_id) setUpiId(localCachedProfile.upi_id);
+              if (localCachedProfile.payment_qr_url) setPaymentQrUrl(localCachedProfile.payment_qr_url);
+            }
             if (localCachedProfile.stamp_url) setStampUrl(localCachedProfile.stamp_url);
             if (localCachedProfile.signature_url) setSignatureUrl(localCachedProfile.signature_url);
           }
@@ -319,12 +358,25 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
           if (mergedProfile.default_terms) {
             setTerms(mergedProfile.default_terms);
           }
-          if (mergedProfile.bank_account_name) setBankAccountName(mergedProfile.bank_account_name);
-          if (mergedProfile.bank_name) setBankName(mergedProfile.bank_name);
-          if (mergedProfile.account_number) setAccountNumber(mergedProfile.account_number);
-          if (mergedProfile.ifsc) setIfsc(mergedProfile.ifsc);
-          if (mergedProfile.upi_id) setUpiId(mergedProfile.upi_id);
-          if (mergedProfile.payment_qr_url) setPaymentQrUrl(mergedProfile.payment_qr_url);
+
+          const defaultAcc = (mergedProfile.default_payment_account as "account1" | "account2") || "account1";
+          setSelectedAccount(defaultAcc);
+          if (defaultAcc === "account2") {
+            setBankAccountName(mergedProfile.account2_bank_account_name || HARDCODED_BUSINESS_PROFILE.account2_bank_account_name || "");
+            setBankName(mergedProfile.account2_bank_name || HARDCODED_BUSINESS_PROFILE.account2_bank_name || "");
+            setAccountNumber(mergedProfile.account2_account_number || HARDCODED_BUSINESS_PROFILE.account2_account_number || "");
+            setIfsc(mergedProfile.account2_ifsc || HARDCODED_BUSINESS_PROFILE.account2_ifsc || "");
+            setUpiId(mergedProfile.account2_upi_id || HARDCODED_BUSINESS_PROFILE.account2_upi_id || "");
+            setPaymentQrUrl(mergedProfile.account2_payment_qr_url || HARDCODED_BUSINESS_PROFILE.account2_payment_qr_url || "");
+          } else {
+            setBankAccountName(mergedProfile.bank_account_name || HARDCODED_BUSINESS_PROFILE.bank_account_name || "");
+            setBankName(mergedProfile.bank_name || HARDCODED_BUSINESS_PROFILE.bank_name || "");
+            setAccountNumber(mergedProfile.account_number || HARDCODED_BUSINESS_PROFILE.account_number || "");
+            setIfsc(mergedProfile.ifsc || HARDCODED_BUSINESS_PROFILE.ifsc || "");
+            setUpiId(mergedProfile.upi_id || HARDCODED_BUSINESS_PROFILE.upi_id || "");
+            setPaymentQrUrl(mergedProfile.payment_qr_url || HARDCODED_BUSINESS_PROFILE.payment_qr_url || "");
+          }
+
           if (mergedProfile.stamp_url) setStampUrl(mergedProfile.stamp_url);
           if (mergedProfile.signature_url) setSignatureUrl(mergedProfile.signature_url);
 
@@ -521,6 +573,7 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
         gstin: selectedCustomer.gstin,
       };
 
+      const isAcc2 = selectedAccount === "account2";
       const businessSnapshot: BusinessSnapshot = {
         business_name: businessProfile?.business_name || HARDCODED_BUSINESS_PROFILE.business_name,
         address: businessProfile?.address || HARDCODED_BUSINESS_PROFILE.address,
@@ -530,13 +583,17 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
         phone: businessProfile?.phone || HARDCODED_BUSINESS_PROFILE.phone,
         email: businessProfile?.email || null,
         pan: businessProfile?.pan || null,
-        bank_account_name: bankAccountName.trim() || HARDCODED_BUSINESS_PROFILE.bank_account_name,
-        bank_name: bankName.trim() || HARDCODED_BUSINESS_PROFILE.bank_name,
-        account_number: accountNumber.trim() || HARDCODED_BUSINESS_PROFILE.account_number,
-        ifsc: ifsc.trim().toUpperCase() || HARDCODED_BUSINESS_PROFILE.ifsc,
+        selected_account: selectedAccount,
+        account_label: isAcc2
+          ? (businessProfile?.account2_label || "Account 2")
+          : (businessProfile?.account1_label || "Account 1"),
+        bank_account_name: bankAccountName.trim() || (isAcc2 ? "" : HARDCODED_BUSINESS_PROFILE.bank_account_name),
+        bank_name: bankName.trim() || (isAcc2 ? "" : HARDCODED_BUSINESS_PROFILE.bank_name),
+        account_number: accountNumber.trim() || (isAcc2 ? "" : HARDCODED_BUSINESS_PROFILE.account_number),
+        ifsc: ifsc.trim().toUpperCase() || (isAcc2 ? "" : HARDCODED_BUSINESS_PROFILE.ifsc),
         upi_id: upiId.trim() || null,
         logo_url: businessProfile?.logo_url || null,
-        payment_qr_url: paymentQrUrl || HARDCODED_BUSINESS_PROFILE.payment_qr_url,
+        payment_qr_url: paymentQrUrl || (isAcc2 ? "" : HARDCODED_BUSINESS_PROFILE.payment_qr_url),
         stamp_url: stampUrl || HARDCODED_BUSINESS_PROFILE.stamp_url,
         signature_url: signatureUrl || HARDCODED_BUSINESS_PROFILE.signature_url,
       };
@@ -599,6 +656,26 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
         },
       );
       setCreatedInvoice(savedInvoice);
+
+      // Trigger automatic background Google Drive backup
+      setDriveUploading(true);
+      apiRequest<{ success: boolean; webViewLink?: string; error?: string }>("/api/drive/upload", {
+        method: "POST",
+        body: jsonBody({ invoiceId: savedInvoice.id }),
+      })
+        .then((driveRes) => {
+          if (driveRes?.success && driveRes?.webViewLink) {
+            setCreatedInvoice((prev) =>
+              prev ? { ...prev, drive_file_url: driveRes.webViewLink, drive_synced_at: new Date().toISOString() } : prev
+            );
+          }
+        })
+        .catch((driveErr) => {
+          console.warn("Drive auto-backup notice:", driveErr);
+        })
+        .finally(() => {
+          setDriveUploading(false);
+        });
     } catch (err: unknown) {
       console.error("Error creating invoice:", err);
       setErrorMessage(err instanceof Error ? err.message : "Could not save invoice.");
@@ -695,9 +772,32 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
               <p className="text-emerald-700 text-[11px] mt-0.5">
                 Total Payable: {formatCurrency(createdInvoice.total_amount)} • Billed to {createdInvoice.customer_snapshot.customer_name}
               </p>
+              {createdInvoice.drive_file_url && (
+                <p className="text-emerald-800 text-[11px] font-medium mt-1 flex items-center gap-1.5">
+                  <Check className="h-3.5 w-3.5 text-emerald-600" />
+                  Backed up to Google Drive (FY {createdInvoice.financial_year})
+                </p>
+              )}
+              {driveUploading && (
+                <p className="text-emerald-700 text-[11px] font-medium mt-1 flex items-center gap-1.5">
+                  <Loader2 className="h-3 w-3 animate-spin text-emerald-600" />
+                  Backing up invoice PDF to Google Drive...
+                </p>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {createdInvoice.drive_file_url && (
+              <a
+                href={createdInvoice.drive_file_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-[#0b1f3a] text-white hover:bg-[#132c50] transition-colors shadow-sm"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                View in Google Drive
+              </a>
+            )}
             <InvoicePDFActions invoice={createdInvoice} size="sm" />
             <Link href="/invoices">
               <Button size="sm" variant="outline" className="text-xs h-8 bg-white">
@@ -1237,6 +1337,113 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
           </span>
         </CardHeader>
         <CardContent className="p-4 sm:p-6 space-y-4">
+          {/* Account Selection Cards */}
+          <div className="space-y-2 pb-2 border-b border-slate-100">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold text-slate-800">
+                Choose Payment Receiving Account *
+              </Label>
+              <span className="text-[11px] text-slate-500">
+                Select which account receives payment & generates the QR on PDF
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Account 1 Card */}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => handleAccountSelect("account1")}
+                className={`relative flex items-start gap-3 p-3.5 rounded-lg border cursor-pointer transition-all ${
+                  selectedAccount === "account1"
+                    ? "border-[#0b1f3a] bg-blue-50/40 shadow-sm ring-1 ring-[#0b1f3a]"
+                    : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 bg-white"
+                }`}
+              >
+                <div className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                  selectedAccount === "account1" ? "border-[#0b1f3a] bg-[#0b1f3a] text-white" : "border-slate-300 bg-white"
+                }`}>
+                  {selectedAccount === "account1" && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                </div>
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-bold text-slate-900">
+                      {businessProfile.account1_label || "Account 1 (Primary)"}
+                    </span>
+                    <Badge variant="outline" className="text-[10px] font-semibold py-0 px-1.5 bg-white border-slate-200 text-slate-700">
+                      Primary
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] font-medium text-slate-700 truncate">
+                    {businessProfile.account1_bank_name || businessProfile.bank_name || HARDCODED_BUSINESS_PROFILE.bank_name}
+                  </p>
+                  <p className="text-[11px] font-mono text-slate-500">
+                    A/C: {businessProfile.account1_account_number || businessProfile.account_number || HARDCODED_BUSINESS_PROFILE.account_number}
+                  </p>
+                  <p className="text-[10px] font-mono text-slate-400">
+                    IFSC: {businessProfile.account1_ifsc || businessProfile.ifsc || HARDCODED_BUSINESS_PROFILE.ifsc}
+                  </p>
+                </div>
+                {(businessProfile.account1_payment_qr_url || businessProfile.payment_qr_url || HARDCODED_BUSINESS_PROFILE.payment_qr_url) && (
+                  <div className="shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={businessProfile.account1_payment_qr_url || businessProfile.payment_qr_url || HARDCODED_BUSINESS_PROFILE.payment_qr_url || undefined}
+                      alt="Account 1 QR"
+                      className="h-10 w-10 object-contain rounded border border-slate-200 bg-white p-0.5"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Account 2 Card */}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => handleAccountSelect("account2")}
+                className={`relative flex items-start gap-3 p-3.5 rounded-lg border cursor-pointer transition-all ${
+                  selectedAccount === "account2"
+                    ? "border-[#0b1f3a] bg-blue-50/40 shadow-sm ring-1 ring-[#0b1f3a]"
+                    : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 bg-white"
+                }`}
+              >
+                <div className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                  selectedAccount === "account2" ? "border-[#0b1f3a] bg-[#0b1f3a] text-white" : "border-slate-300 bg-white"
+                }`}>
+                  {selectedAccount === "account2" && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                </div>
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-bold text-slate-900">
+                      {businessProfile.account2_label || "Account 2 (Secondary)"}
+                    </span>
+                    <Badge variant="outline" className="text-[10px] font-semibold py-0 px-1.5 bg-white border-slate-200 text-slate-700">
+                      Secondary
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] font-medium text-slate-700 truncate">
+                    {businessProfile.account2_bank_name || HARDCODED_BUSINESS_PROFILE.account2_bank_name || "Bank not set"}
+                  </p>
+                  <p className="text-[11px] font-mono text-slate-500">
+                    A/C: {businessProfile.account2_account_number || HARDCODED_BUSINESS_PROFILE.account2_account_number || "—"}
+                  </p>
+                  <p className="text-[10px] font-mono text-slate-400">
+                    IFSC: {businessProfile.account2_ifsc || HARDCODED_BUSINESS_PROFILE.account2_ifsc || "—"}
+                  </p>
+                </div>
+                {(businessProfile.account2_payment_qr_url || HARDCODED_BUSINESS_PROFILE.account2_payment_qr_url) && (
+                  <div className="shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={businessProfile.account2_payment_qr_url || HARDCODED_BUSINESS_PROFILE.account2_payment_qr_url || undefined}
+                      alt="Account 2 QR"
+                      className="h-10 w-10 object-contain rounded border border-slate-200 bg-white p-0.5"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="inv_bank_account_name">Account Holder Name</Label>

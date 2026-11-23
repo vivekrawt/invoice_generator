@@ -36,16 +36,21 @@ export function InvoicePDFActions({
     }
 
     const rawB = invoice.business_snapshot || ({} as any);
+    const isAccount2 = rawB.selected_account === "account2";
     const enrichedB = {
       ...HARDCODED_BUSINESS_PROFILE,
       ...rawB,
-      bank_account_name: rawB.bank_account_name || HARDCODED_BUSINESS_PROFILE.bank_account_name,
-      bank_name: rawB.bank_name || HARDCODED_BUSINESS_PROFILE.bank_name,
-      account_number: rawB.account_number || HARDCODED_BUSINESS_PROFILE.account_number,
-      ifsc: rawB.ifsc || HARDCODED_BUSINESS_PROFILE.ifsc,
+      business_name: rawB.business_name || HARDCODED_BUSINESS_PROFILE.business_name,
+      address: rawB.address || HARDCODED_BUSINESS_PROFILE.address,
+      phone: rawB.phone || HARDCODED_BUSINESS_PROFILE.phone,
+      bank_account_name: rawB.bank_account_name || (isAccount2 ? "" : HARDCODED_BUSINESS_PROFILE.bank_account_name),
+      bank_name: rawB.bank_name || (isAccount2 ? "" : HARDCODED_BUSINESS_PROFILE.bank_name),
+      account_number: rawB.account_number || (isAccount2 ? "" : HARDCODED_BUSINESS_PROFILE.account_number),
+      ifsc: rawB.ifsc || (isAccount2 ? "" : HARDCODED_BUSINESS_PROFILE.ifsc),
+      upi_id: rawB.upi_id || (isAccount2 ? "" : HARDCODED_BUSINESS_PROFILE.upi_id),
       stamp_url: rawB.stamp_url || HARDCODED_BUSINESS_PROFILE.stamp_url,
       signature_url: rawB.signature_url || HARDCODED_BUSINESS_PROFILE.signature_url,
-      payment_qr_url: rawB.payment_qr_url || HARDCODED_BUSINESS_PROFILE.payment_qr_url,
+      payment_qr_url: rawB.payment_qr_url || (isAccount2 ? "" : HARDCODED_BUSINESS_PROFILE.payment_qr_url),
     };
 
     const enrichedInvoice = {
