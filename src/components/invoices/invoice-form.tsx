@@ -699,7 +699,7 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
                 const existing = JSON.parse(localStorage.getItem("abira_saved_invoices") || "[]") as Invoice[];
                 const localUpdated = existing.map((i) => (i.id === updated.id ? updated : i));
                 localStorage.setItem("abira_saved_invoices", JSON.stringify(localUpdated));
-              } catch {}
+              } catch { }
               return updated;
             });
           } else if (driveRes?.error) {

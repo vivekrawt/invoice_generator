@@ -92,10 +92,17 @@ function getDriveClient() {
     privateKey = privateKey.replace(/\\n/g, "\n");
   }
 
+  const impersonateUser = (
+    process.env.GOOGLE_DRIVE_IMPERSONATE_USER ||
+    process.env.GOOGLE_DRIVE_USER_EMAIL ||
+    ""
+  ).trim();
+
   const auth = new google.auth.JWT({
     email: clientEmail,
     key: privateKey,
     scopes: ["https://www.googleapis.com/auth/drive"],
+    subject: impersonateUser || undefined,
   });
 
   return google.drive({ version: "v3", auth });
@@ -118,6 +125,8 @@ async function getOrCreateYearFolder(
       q: query,
       fields: "files(id, name)",
       spaces: "drive",
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
     });
 
     const existing = searchRes.data.files?.[0];
@@ -133,6 +142,7 @@ async function getOrCreateYearFolder(
         parents: [parentFolderId],
       },
       fields: "id, name",
+      supportsAllDrives: true,
     });
 
     if (!createRes.data.id) {
@@ -190,6 +200,8 @@ export async function uploadInvoicePdfToDrive(
       q: existingQuery,
       fields: "files(id, name, webViewLink)",
       spaces: "drive",
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
     });
     existingFileId = listRes.data.files?.[0]?.id || null;
   } catch (e) {
@@ -210,6 +222,7 @@ export async function uploadInvoicePdfToDrive(
       fileId: existingFileId,
       media,
       fields: "id, name, webViewLink",
+      supportsAllDrives: true,
     });
     fileId = updateRes.data.id || existingFileId;
     webViewLink = updateRes.data.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
@@ -223,6 +236,7 @@ export async function uploadInvoicePdfToDrive(
       },
       media,
       fields: "id, name, webViewLink",
+      supportsAllDrives: true,
     });
 
     fileId = createRes.data.id || "";
@@ -236,6 +250,7 @@ export async function uploadInvoicePdfToDrive(
           role: "reader",
           type: "anyone",
         },
+        supportsAllDrives: true,
       });
     } catch (permErr) {
       console.warn("Public permission create notice (inherits folder permissions):", permErr);
