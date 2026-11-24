@@ -2,14 +2,22 @@ import { google } from "googleapis";
 import { Readable } from "stream";
 import type { Invoice } from "@/types/database.types";
 
-interface DriveConfig {
+export interface DriveConfig {
   isConfigured: boolean;
+  mode: "webhook" | "service_account" | "none";
+  webhookUrl?: string;
   clientEmail?: string;
   folderId?: string;
   folderUrl?: string;
 }
 
 export function getDriveConfig(): DriveConfig {
+  let webhookUrl = (
+    process.env.GOOGLE_DRIVE_WEBHOOK_URL ||
+    process.env.GOOGLE_SCRIPT_WEBHOOK_URL ||
+    ""
+  ).trim();
+
   let clientEmail = (
     process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
     process.env.GOOGLE_CLIENT_EMAIL ||
@@ -22,7 +30,13 @@ export function getDriveConfig(): DriveConfig {
   ).trim();
   let folderId = (process.env.GOOGLE_DRIVE_FOLDER_ID || "").trim();
 
-  // Strip surrounding quotes if user wrapped them in "..." or '...'
+  // Strip surrounding quotes
+  if (
+    (webhookUrl.startsWith('"') && webhookUrl.endsWith('"')) ||
+    (webhookUrl.startsWith("'") && webhookUrl.endsWith("'"))
+  ) {
+    webhookUrl = webhookUrl.slice(1, -1).trim();
+  }
   if (
     (clientEmail.startsWith('"') && clientEmail.endsWith('"')) ||
     (clientEmail.startsWith("'") && clientEmail.endsWith("'"))
@@ -42,8 +56,6 @@ export function getDriveConfig(): DriveConfig {
     folderId = folderId.slice(1, -1).trim();
   }
 
-  // If the user pasted the entire Google Drive folder URL instead of just the folder ID:
-  // e.g. https://drive.google.com/drive/folders/1abcXYZ_123...
   if (folderId.includes("/folders/")) {
     const match = folderId.match(/\/folders\/([a-zA-Z0-9_-]+)/);
     if (match?.[1]) {
@@ -51,12 +63,15 @@ export function getDriveConfig(): DriveConfig {
     }
   }
 
-  const isConfigured = Boolean(
+  const isWebhookConfigured = webhookUrl.startsWith("http");
+  const isServiceAccountConfigured = Boolean(
     clientEmail.length > 0 && privateKey.length > 0 && folderId.length > 0
   );
 
   return {
-    isConfigured,
+    isConfigured: isWebhookConfigured || isServiceAccountConfigured,
+    mode: isWebhookConfigured ? "webhook" : isServiceAccountConfigured ? "service_account" : "none",
+    webhookUrl: isWebhookConfigured ? webhookUrl : undefined,
     clientEmail: clientEmail || undefined,
     folderId: folderId || undefined,
     folderUrl: folderId
@@ -66,20 +81,13 @@ export function getDriveConfig(): DriveConfig {
 }
 
 function getDriveClient() {
-  const { isConfigured, clientEmail } = getDriveConfig();
-  if (!isConfigured || !clientEmail) {
-    throw new Error(
-      "Google Drive service account credentials are not configured. Set GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY, and GOOGLE_DRIVE_FOLDER_ID in environment variables."
-    );
-  }
-
+  const { clientEmail } = getDriveConfig();
   let privateKey = (
     process.env.GOOGLE_PRIVATE_KEY ||
     process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY ||
     ""
   ).trim();
 
-  // Strip surrounding quotes if present
   if (
     (privateKey.startsWith('"') && privateKey.endsWith('"')) ||
     (privateKey.startsWith("'") && privateKey.endsWith("'"))
@@ -87,7 +95,6 @@ function getDriveClient() {
     privateKey = privateKey.slice(1, -1).trim();
   }
 
-  // Handle newline escapes in private key environment variables
   if (privateKey.includes("\\n")) {
     privateKey = privateKey.replace(/\\n/g, "\n");
   }
@@ -106,6 +113,65 @@ function getDriveClient() {
   });
 
   return google.drive({ version: "v3", auth });
+}
+
+/**
+ * Uploads a file via Google Apps Script Webhook (runs as personal Gmail user, 15GB free quota).
+ */
+export async function uploadFileViaDriveWebhook({
+  webhookUrl,
+  fileName,
+  fileBase64,
+  folderType,
+  subfolderName,
+}: {
+  webhookUrl: string;
+  fileName: string;
+  fileBase64: string;
+  folderType: "invoices" | "rate-charts";
+  subfolderName?: string;
+}): Promise<UploadResult> {
+  const cleanUrl = webhookUrl.trim();
+  if (!cleanUrl.startsWith("http")) {
+    throw new Error("Invalid Google Apps Script Webhook URL.");
+  }
+
+  const res = await fetch(cleanUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8",
+    },
+    body: JSON.stringify({
+      fileName,
+      fileBase64,
+      folderType,
+      subfolderName: subfolderName || "",
+    }),
+    redirect: "follow",
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Google Apps Script returned status ${res.status}: ${errorText.slice(0, 150)}`);
+  }
+
+  const text = await res.text();
+  let result: any;
+  try {
+    result = JSON.parse(text);
+  } catch {
+    throw new Error(`Google Apps Script returned unexpected response: ${text.slice(0, 150)}`);
+  }
+
+  if (!result.success) {
+    throw new Error(result.error || "Google Apps Script upload failed.");
+  }
+
+  return {
+    fileId: result.fileId || "",
+    webViewLink: result.webViewLink || (result.fileId ? `https://drive.google.com/file/d/${result.fileId}/view` : ""),
+    fileName,
+  };
 }
 
 /**
@@ -134,7 +200,6 @@ async function getOrCreateYearFolder(
       return existing.id;
     }
 
-    // Create subfolder
     const createRes = await drive.files.create({
       requestBody: {
         name: folderName,
@@ -163,37 +228,49 @@ export interface UploadResult {
 }
 
 /**
- * Uploads an invoice PDF buffer to the corresponding financial year subfolder on Google Drive
+ * Universal PDF upload dispatcher (prefers Google Apps Script Webhook, falls back to Service Account)
  */
-export async function uploadInvoicePdfToDrive(
-  invoice: Invoice,
-  pdfBuffer: Buffer
-): Promise<UploadResult> {
+export async function uploadPdfToDrive({
+  fileName,
+  pdfBuffer,
+  folderType,
+  subfolderName,
+  customWebhookUrl,
+}: {
+  fileName: string;
+  pdfBuffer: Buffer;
+  folderType: "invoices" | "rate-charts";
+  subfolderName?: string;
+  customWebhookUrl?: string;
+}): Promise<UploadResult> {
   const config = getDriveConfig();
-  if (!config.isConfigured || !config.folderId) {
+  const effectiveWebhook = customWebhookUrl?.trim() || config.webhookUrl;
+
+  if (effectiveWebhook) {
+    return await uploadFileViaDriveWebhook({
+      webhookUrl: effectiveWebhook,
+      fileName,
+      fileBase64: pdfBuffer.toString("base64"),
+      folderType,
+      subfolderName,
+    });
+  }
+
+  // Fallback to Google Service Account
+  if (!config.folderId) {
     throw new Error(
-      "Google Drive is not configured. Please set GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY, and GOOGLE_DRIVE_FOLDER_ID."
+      "Google Drive is not configured. Please paste your Google Apps Script Webhook URL in Settings or set GOOGLE_DRIVE_WEBHOOK_URL in Vercel."
     );
   }
 
   const drive = getDriveClient();
+  let targetFolderId = config.folderId;
 
-  // Find or create Year subfolder
-  const yearFolderId = await getOrCreateYearFolder(
-    drive,
-    config.folderId,
-    invoice.financial_year || new Date().getFullYear().toString()
-  );
+  if (subfolderName) {
+    targetFolderId = await getOrCreateYearFolder(drive, config.folderId, subfolderName);
+  }
 
-  // Clean filename: e.g. "Invoice ABR-2024-25-001 - Customer Name.pdf"
-  const sanitizedInvoiceNumber = invoice.invoice_number.replace(/[\/\\:]/g, "-");
-  const sanitizedCustomer = (invoice.customer_snapshot?.customer_name || "Customer")
-    .replace(/[\/\\:*?"<>|]/g, "")
-    .trim();
-  const fileName = `Invoice ${sanitizedInvoiceNumber} - ${sanitizedCustomer}.pdf`;
-
-  // Check if file already exists in this folder to avoid duplicates
-  const existingQuery = `'${yearFolderId}' in parents and name = '${fileName}' and trashed = false`;
+  const existingQuery = `'${targetFolderId}' in parents and name = '${fileName}' and trashed = false`;
   let existingFileId: string | null = null;
   try {
     const listRes = await drive.files.list({
@@ -217,7 +294,6 @@ export async function uploadInvoicePdfToDrive(
   let webViewLink = "";
 
   if (existingFileId) {
-    // Update existing file content
     const updateRes = await drive.files.update({
       fileId: existingFileId,
       media,
@@ -227,11 +303,10 @@ export async function uploadInvoicePdfToDrive(
     fileId = updateRes.data.id || existingFileId;
     webViewLink = updateRes.data.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
   } else {
-    // Create new file
     const createRes = await drive.files.create({
       requestBody: {
         name: fileName,
-        parents: [yearFolderId],
+        parents: [targetFolderId],
         mimeType: "application/pdf",
       },
       media,
@@ -242,7 +317,6 @@ export async function uploadInvoicePdfToDrive(
     fileId = createRes.data.id || "";
     webViewLink = createRes.data.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
 
-    // Make file viewable with link
     try {
       await drive.permissions.create({
         fileId,
@@ -266,4 +340,52 @@ export async function uploadInvoicePdfToDrive(
     webViewLink: webViewLink || `https://drive.google.com/file/d/${fileId}/view`,
     fileName,
   };
+}
+
+/**
+ * Uploads an invoice PDF buffer
+ */
+export async function uploadInvoicePdfToDrive(
+  invoice: Invoice,
+  pdfBuffer: Buffer,
+  customWebhookUrl?: string
+): Promise<UploadResult> {
+  const sanitizedInvoiceNumber = invoice.invoice_number.replace(/[\/\\:]/g, "-");
+  const sanitizedCustomer = (invoice.customer_snapshot?.customer_name || "Customer")
+    .replace(/[\/\\:*?"<>|]/g, "")
+    .trim();
+  const fileName = `Invoice ${sanitizedInvoiceNumber} - ${sanitizedCustomer}.pdf`;
+
+  return await uploadPdfToDrive({
+    fileName,
+    pdfBuffer,
+    folderType: "invoices",
+    subfolderName: invoice.financial_year || new Date().getFullYear().toString(),
+    customWebhookUrl,
+  });
+}
+
+/**
+ * Uploads a Rate Chart PDF buffer
+ */
+export async function uploadRateChartPdfToDrive({
+  orgName,
+  pdfBuffer,
+  customWebhookUrl,
+}: {
+  orgName?: string;
+  pdfBuffer: Buffer;
+  customWebhookUrl?: string;
+}): Promise<UploadResult> {
+  const safeOrg = orgName?.trim()
+    ? ` - ${orgName.trim().replace(/[\/\\:*?"<>|]/g, "")}`
+    : "";
+  const fileName = `Abira enterprise rate chart${safeOrg}.pdf`;
+
+  return await uploadPdfToDrive({
+    fileName,
+    pdfBuffer,
+    folderType: "rate-charts",
+    customWebhookUrl,
+  });
 }

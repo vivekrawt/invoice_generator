@@ -135,9 +135,11 @@ export default function InvoicesPage() {
         console.warn("Client PDF generation notice:", pdfErr);
       }
 
+      const localWebhook = typeof window !== "undefined" ? localStorage.getItem("abira_drive_webhook_url") || undefined : undefined;
+
       const res = await apiRequest<{ success: boolean; webViewLink?: string; error?: string }>("/api/drive/upload", {
         method: "POST",
-        body: jsonBody({ invoiceId: invId, invoice: targetInvoice, pdfBase64 }),
+        body: jsonBody({ invoiceId: invId, invoice: targetInvoice, pdfBase64, webhookUrl: localWebhook }),
       });
       if (res?.success && res?.webViewLink) {
         setInvoices((prev) => {

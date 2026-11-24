@@ -19,6 +19,9 @@ import {
   AlertTriangle,
   CheckCircle2,
   CreditCard,
+  CloudUpload,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -70,10 +73,16 @@ export default function SettingsPage() {
   const [stampPreviewUrl, setStampPreviewUrl] = React.useState("");
   const [profileLoaded, setProfileLoaded] = React.useState(false);
   const [message, setMessage] = React.useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [webhookUrl, setWebhookUrl] = React.useState("");
+  const [webhookSaving, setWebhookSaving] = React.useState(false);
+  const [copiedScript, setCopiedScript] = React.useState(false);
+  const [webhookStatusMessage, setWebhookStatusMessage] = React.useState<{ text: string; type: "success" | "error" } | null>(null);
   const [driveStatus, setDriveStatus] = React.useState<{
     configured: boolean;
     folderUrl: string | null;
     clientEmail: string | null;
+    hasWebhook?: boolean;
+    mode?: string;
   } | null>(null);
 
   React.useEffect(() => {
@@ -81,6 +90,9 @@ export default function SettingsPage() {
 
     // Immediate hydration from localStorage so settings are NEVER lost on refresh
     try {
+      const cachedWebhook = localStorage.getItem("abira_drive_webhook_url") || "";
+      if (cachedWebhook) setWebhookUrl(cachedWebhook);
+
       const cached = typeof window !== "undefined" ? localStorage.getItem("abira_business_profile") : null;
       if (cached) {
         const parsed = JSON.parse(cached) as Partial<BusinessProfile>;
@@ -1086,6 +1098,194 @@ export default function SettingsPage() {
           </Button>
         </div>
       </form>
+
+      {/* Section 5: Google Drive Cloud Backup (Google Apps Script Webhook) */}
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <CloudUpload className="h-4 w-4 text-blue-600" />
+              <CardTitle className="text-sm font-semibold text-slate-900">
+                Google Drive Cloud Backup Configuration
+              </CardTitle>
+            </div>
+            {webhookUrl ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                Personal Gmail Webhook Active (15 GB)
+              </span>
+            ) : driveStatus?.configured ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                <CheckCircle2 className="h-3 w-3 text-blue-600" />
+                Service Account Active
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                Not Connected
+              </span>
+            )}
+          </div>
+          <CardDescription className="text-xs text-slate-500">
+            Connect your personal Google Drive account using a simple Google Apps Script Webhook. When you click <strong>Save to Google Drive</strong> on an invoice or rate chart, it saves directly into your personal Google Drive (15 GB) without quota errors.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6 space-y-5">
+          {webhookStatusMessage && (
+            <div
+              className={`p-3 rounded-lg text-xs flex items-center justify-between ${
+                webhookStatusMessage.type === "success"
+                  ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                  : "bg-red-50 text-red-800 border border-red-200"
+              }`}
+            >
+              <span>{webhookStatusMessage.text}</span>
+              <button
+                type="button"
+                onClick={() => setWebhookStatusMessage(null)}
+                className="font-semibold underline ml-2"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* Webhook URL Input */}
+          <div className="space-y-2">
+            <Label htmlFor="webhook_url" className="text-xs font-semibold text-slate-800">
+              Google Apps Script Webhook URL
+            </Label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Input
+                id="webhook_url"
+                type="url"
+                placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                className="text-xs font-mono flex-1"
+              />
+              <Button
+                type="button"
+                onClick={() => {
+                  try {
+                    const clean = webhookUrl.trim();
+                    localStorage.setItem("abira_drive_webhook_url", clean);
+                    setWebhookStatusMessage({
+                      text: clean
+                        ? "Google Drive Webhook URL saved successfully! Your manual backups will use this URL."
+                        : "Webhook URL cleared.",
+                      type: "success",
+                    });
+                    setTimeout(() => setWebhookStatusMessage(null), 4000);
+                  } catch {
+                    setWebhookStatusMessage({ text: "Could not save to browser storage.", type: "error" });
+                  }
+                }}
+                className="bg-[#0b1f3a] hover:bg-[#132c50] text-white text-xs gap-1.5 shrink-0"
+              >
+                <Save className="h-3.5 w-3.5" />
+                Save Webhook
+              </Button>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Tip: You can also set <code>GOOGLE_DRIVE_WEBHOOK_URL</code> in your Vercel Environment Variables.
+            </p>
+          </div>
+
+          {/* Step-by-Step Setup Guide */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <FolderCheck className="h-4 w-4 text-blue-600" />
+                1-Minute Setup Guide for your personal Gmail
+              </h4>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const scriptText = `function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var fileName = data.fileName || ("Document_" + new Date().getTime() + ".pdf");
+    var fileBase64 = data.fileBase64;
+    var folderType = data.folderType || "invoices";
+    var subfolderName = data.subfolderName || "";
+
+    var rootName = folderType === "rate-charts" ? "ABIRA Rate Charts" : "ABIRA Invoices";
+
+    var rootFolder;
+    var rootFolders = DriveApp.getFoldersByName(rootName);
+    if (rootFolders.hasNext()) {
+      rootFolder = rootFolders.next();
+    } else {
+      rootFolder = DriveApp.createFolder(rootName);
+    }
+
+    var targetFolder = rootFolder;
+    if (subfolderName) {
+      var subFolders = rootFolder.getFoldersByName(subfolderName);
+      if (subFolders.hasNext()) {
+        targetFolder = subFolders.next();
+      } else {
+        targetFolder = rootFolder.createFolder(subfolderName);
+      }
+    }
+
+    var decoded = Utilities.base64Decode(fileBase64);
+    var blob = Utilities.newBlob(decoded, "application/pdf", fileName);
+    var file = targetFolder.createFile(blob);
+
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      fileId: file.getId(),
+      webViewLink: file.getUrl(),
+      fileName: file.getName()
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      error: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+                  navigator.clipboard.writeText(scriptText);
+                  setCopiedScript(true);
+                  setTimeout(() => setCopiedScript(false), 3000);
+                }}
+                className="text-xs gap-1.5 h-7 bg-white"
+              >
+                {copiedScript ? (
+                  <>
+                    <Check className="h-3 w-3 text-emerald-600" />
+                    <span className="text-emerald-700">Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3 w-3" />
+                    <span>Copy Script Code</span>
+                  </>
+                )}
+              </Button>
+            </div>
+
+            <ol className="text-xs text-slate-600 space-y-1.5 list-decimal list-inside leading-relaxed">
+              <li>
+                Open <a href="https://script.google.com/home/start" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline font-medium">script.google.com</a> in your browser (logged into your personal Gmail).
+              </li>
+              <li>Click <strong>New project</strong>.</li>
+              <li>Delete all existing code in the editor, click <strong>Copy Script Code</strong> above, and paste it.</li>
+              <li>Click <strong>Deploy</strong> (top right) &gt; <strong>New deployment</strong>.</li>
+              <li>Click the gear icon next to &quot;Select type&quot; and choose <strong>Web app</strong>.</li>
+              <li>Set <strong>Execute as</strong>: <code>Me (your Gmail)</code> and <strong>Who has access</strong>: <code>Anyone</code>.</li>
+              <li>Click <strong>Deploy</strong>, grant permission, and copy the generated <strong>Web app URL</strong>.</li>
+              <li>Paste the URL in the box above and click <strong>Save Webhook</strong>!</li>
+            </ol>
+          </div>
+        </CardContent>
+      </Card>
+
       <ChangeSharedPasswordForm />
     </div>
   );

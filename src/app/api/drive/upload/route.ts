@@ -3,36 +3,77 @@ import React from "react";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { requireAppAuth } from "@/lib/supabase/http";
 import { getInvoice, updateInvoiceDriveUrl } from "@/lib/supabase/store";
-import { uploadInvoicePdfToDrive, getDriveConfig } from "@/lib/google-drive";
+import {
+  uploadInvoicePdfToDrive,
+  uploadRateChartPdfToDrive,
+  getDriveConfig,
+  UploadResult,
+} from "@/lib/google-drive";
 import { InvoicePDFDocument } from "@/components/invoices/invoice-pdf-document";
 import type { Invoice } from "@/types/database.types";
 
-export const maxDuration = 60; // Allow sufficient time for PDF rendering and Drive upload
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
-    const config = getDriveConfig();
-    if (!config.isConfigured) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Google Drive is not configured. Please set GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY, and GOOGLE_DRIVE_FOLDER_ID.",
-        },
-        { status: 400 }
-      );
-    }
-
     const auth = await requireAppAuth();
     if (!auth.ok) return auth.response;
     const context = auth.context;
 
     const body = await req.json();
-    const { invoiceId, pdfBase64, invoice: inlineInvoice } = body as {
+    const {
+      type = "invoice",
+      invoiceId,
+      pdfBase64,
+      invoice: inlineInvoice,
+      orgName,
+      webhookUrl,
+    } = body as {
+      type?: "invoice" | "rate-chart";
       invoiceId?: string;
       pdfBase64?: string;
       invoice?: Invoice;
+      orgName?: string;
+      webhookUrl?: string;
     };
 
+    const config = getDriveConfig();
+    const hasWebhook = Boolean(webhookUrl?.trim() || config.webhookUrl);
+    if (!config.isConfigured && !hasWebhook) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Google Drive is not configured. Please paste your Google Apps Script Webhook URL in Settings or set GOOGLE_DRIVE_WEBHOOK_URL in Vercel.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (type === "rate-chart") {
+      if (!pdfBase64) {
+        return NextResponse.json(
+          { success: false, error: "Missing pdfBase64 for rate chart backup." },
+          { status: 400 }
+        );
+      }
+
+      const pdfBuffer = Buffer.from(pdfBase64, "base64");
+      const uploadResult = await uploadRateChartPdfToDrive({
+        orgName,
+        pdfBuffer,
+        customWebhookUrl: webhookUrl,
+      });
+
+      return NextResponse.json({
+        success: true,
+        fileId: uploadResult.fileId,
+        webViewLink: uploadResult.webViewLink,
+        fileName: uploadResult.fileName,
+      });
+    }
+
+    // Invoice backup
     let invoice: Invoice;
     if (inlineInvoice && inlineInvoice.invoice_number) {
       invoice = inlineInvoice;
@@ -50,14 +91,16 @@ export async function POST(req: NextRequest) {
     if (pdfBase64) {
       pdfBuffer = Buffer.from(pdfBase64, "base64");
     } else {
-      // Render PDF server-side using React PDF
       const doc = React.createElement(InvoicePDFDocument, { invoice });
       pdfBuffer = await renderToBuffer(doc as any);
     }
 
-    const uploadResult = await uploadInvoicePdfToDrive(invoice, pdfBuffer);
+    const uploadResult: UploadResult = await uploadInvoicePdfToDrive(
+      invoice,
+      pdfBuffer,
+      webhookUrl
+    );
 
-    // Update invoice record with the Google Drive link
     try {
       await updateInvoiceDriveUrl(
         context,
@@ -76,7 +119,7 @@ export async function POST(req: NextRequest) {
       fileName: uploadResult.fileName,
     });
   } catch (error) {
-    console.error("Error uploading invoice to Drive:", error);
+    console.error("Error uploading to Google Drive:", error);
     return NextResponse.json(
       {
         success: false,

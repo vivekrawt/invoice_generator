@@ -18,6 +18,8 @@ import {
   Download,
   Loader2,
   ChevronRight,
+  CloudUpload,
+  ExternalLink,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -116,6 +118,9 @@ export default function RateChartPage() {
   const [loading, setLoading] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [downloadingPdf, setDownloadingPdf] = React.useState(false);
+  const [uploadingToDrive, setUploadingToDrive] = React.useState(false);
+  const [driveBackupUrl, setDriveBackupUrl] = React.useState<string | null>(null);
+  const [driveNotice, setDriveNotice] = React.useState<{ text: string; type: "success" | "error" } | null>(null);
   const [message, setMessage] = React.useState<{ text: string; type: "success" | "error" } | null>(null);
   const [filterSearch, setFilterSearch] = React.useState("");
 
@@ -454,6 +459,72 @@ export default function RateChartPage() {
     }
   };
 
+  // Manual backup of rate chart PDF directly to Google Drive
+  const handleBackupToDrive = async () => {
+    if (items.length === 0) {
+      alert("Please add at least one product before saving to Google Drive.");
+      return;
+    }
+    try {
+      setUploadingToDrive(true);
+      setDriveNotice(null);
+
+      const activeChart: RateChart = {
+        id: chartId || "draft",
+        organization_name: orgName.trim() || "Client Organization",
+        contact_person: contactPerson.trim() || null,
+        phone: phone.trim() || null,
+        chart_date: chartDate,
+        notes: notes.trim() || null,
+        items,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const doc = <RateChartPDFDocument chart={activeChart} profile={businessProfile} />;
+      const asPdf = pdf(doc);
+      const blob = await asPdf.toBlob();
+
+      const reader = new FileReader();
+      const pdfBase64 = await new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          const dataUrl = reader.result as string;
+          resolve(dataUrl ? dataUrl.split(",")[1] || "" : "");
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+
+      const localWebhook = typeof window !== "undefined" ? localStorage.getItem("abira_drive_webhook_url") || undefined : undefined;
+
+      const res = await apiRequest<{ success: boolean; webViewLink?: string; error?: string }>("/api/drive/upload", {
+        method: "POST",
+        body: jsonBody({
+          type: "rate-chart",
+          orgName: orgName.trim() || "Client Organization",
+          pdfBase64,
+          webhookUrl: localWebhook,
+        }),
+      });
+
+      if (res?.success && res?.webViewLink) {
+        setDriveBackupUrl(res.webViewLink);
+        setDriveNotice({ text: "Rate chart saved to Google Drive successfully!", type: "success" });
+        setTimeout(() => setDriveNotice(null), 6000);
+      } else {
+        throw new Error(res?.error || "Google Drive upload failed.");
+      }
+    } catch (err) {
+      console.error("Rate chart drive backup error:", err);
+      setDriveNotice({
+        text: err instanceof Error ? err.message : "Could not backup to Google Drive.",
+        type: "error",
+      });
+    } finally {
+      setUploadingToDrive(false);
+    }
+  };
+
   // Print with document.title set to "Abira enterprise rate chart"
   const handlePrint = () => {
     const prevTitle = document.title;
@@ -550,6 +621,41 @@ export default function RateChartPage() {
             Download PDF
           </Button>
 
+          {driveBackupUrl ? (
+            <a
+              href={driveBackupUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-700 text-white hover:bg-emerald-800 transition-colors shadow-sm"
+              title="Open rate chart in Google Drive"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              View in Google Drive
+            </a>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleBackupToDrive}
+              disabled={uploadingToDrive || items.length === 0}
+              className="text-xs gap-1.5 text-blue-700 border-blue-200 hover:bg-blue-50"
+              title="Save this rate chart directly to Google Drive"
+            >
+              {uploadingToDrive ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Backing up...</span>
+                </>
+              ) : (
+                <>
+                  <CloudUpload className="h-3.5 w-3.5" />
+                  <span>Save to Google Drive</span>
+                </>
+              )}
+            </Button>
+          )}
+
           <Button
             type="button"
             variant="outline"
@@ -574,6 +680,33 @@ export default function RateChartPage() {
           </Button>
         </div>
       </div>
+
+      {/* Drive notice banner */}
+      {driveNotice && (
+        <div
+          className={`p-3 rounded-lg text-sm flex items-center justify-between no-print ${
+            driveNotice.type === "success"
+              ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+              : "bg-amber-50 text-amber-800 border border-amber-200"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {driveNotice.type === "success" ? (
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+            )}
+            <span>{driveNotice.text}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDriveNotice(null)}
+            className="text-xs font-semibold underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Feedback banner */}
       {message && (

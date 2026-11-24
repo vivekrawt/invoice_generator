@@ -7,6 +7,8 @@ export async function GET() {
     return NextResponse.json({
       configured: config.isConfigured,
       isConfigured: config.isConfigured,
+      mode: config.mode,
+      hasWebhook: Boolean(config.webhookUrl),
       clientEmail: config.clientEmail || null,
       folderId: config.folderId || null,
       folderUrl: config.folderUrl || null,

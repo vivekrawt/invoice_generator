@@ -22,6 +22,7 @@ import {
   Check,
   ExternalLink,
   Building2,
+  CloudUpload,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -667,57 +668,62 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
       } catch (storageErr) {
         console.warn("localStorage cache notice:", storageErr);
       }
-
-      // Trigger automatic background Google Drive backup with inline invoice payload & client-rendered PDF
-      setDriveUploading(true);
-      setDriveError(null);
-
-      (async () => {
-        let pdfBase64: string | undefined = undefined;
-        try {
-          pdfBase64 = await generateInvoicePdfBase64(savedInvoice);
-        } catch (pdfErr) {
-          console.warn("Client PDF generation for Drive backup notice:", pdfErr);
-        }
-
-        return await apiRequest<{ success: boolean; webViewLink?: string; error?: string }>("/api/drive/upload", {
-          method: "POST",
-          body: jsonBody({ invoiceId: savedInvoice.id, invoice: savedInvoice, pdfBase64 }),
-        });
-      })()
-        .then((driveRes) => {
-          if (driveRes?.success && driveRes?.webViewLink) {
-            setDriveError(null);
-            setCreatedInvoice((prev) => {
-              if (!prev) return prev;
-              const updated = {
-                ...prev,
-                drive_file_url: driveRes.webViewLink,
-                drive_synced_at: new Date().toISOString(),
-              };
-              try {
-                const existing = JSON.parse(localStorage.getItem("abira_saved_invoices") || "[]") as Invoice[];
-                const localUpdated = existing.map((i) => (i.id === updated.id ? updated : i));
-                localStorage.setItem("abira_saved_invoices", JSON.stringify(localUpdated));
-              } catch { }
-              return updated;
-            });
-          } else if (driveRes?.error) {
-            setDriveError(driveRes.error);
-          }
-        })
-        .catch((driveErr) => {
-          console.warn("Drive auto-backup notice:", driveErr);
-          setDriveError(driveErr instanceof Error ? driveErr.message : "Drive upload failed");
-        })
-        .finally(() => {
-          setDriveUploading(false);
-        });
     } catch (err: unknown) {
       console.error("Error creating invoice:", err);
       setErrorMessage(err instanceof Error ? err.message : "Could not save invoice.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleBackupToDrive = async (targetInv: Invoice) => {
+    try {
+      setDriveUploading(true);
+      setDriveError(null);
+
+      let pdfBase64: string | undefined = undefined;
+      try {
+        pdfBase64 = await generateInvoicePdfBase64(targetInv);
+      } catch (pdfErr) {
+        console.warn("Client PDF generation for Drive backup notice:", pdfErr);
+      }
+
+      const localWebhook = typeof window !== "undefined" ? localStorage.getItem("abira_drive_webhook_url") || undefined : undefined;
+
+      const driveRes = await apiRequest<{ success: boolean; webViewLink?: string; error?: string }>("/api/drive/upload", {
+        method: "POST",
+        body: jsonBody({
+          invoiceId: targetInv.id,
+          invoice: targetInv,
+          pdfBase64,
+          webhookUrl: localWebhook,
+        }),
+      });
+
+      if (driveRes?.success && driveRes?.webViewLink) {
+        setDriveError(null);
+        setCreatedInvoice((prev) => {
+          if (!prev) return prev;
+          const updated = {
+            ...prev,
+            drive_file_url: driveRes.webViewLink,
+            drive_synced_at: new Date().toISOString(),
+          };
+          try {
+            const existing = JSON.parse(localStorage.getItem("abira_saved_invoices") || "[]") as Invoice[];
+            const localUpdated = existing.map((i) => (i.id === updated.id ? updated : i));
+            localStorage.setItem("abira_saved_invoices", JSON.stringify(localUpdated));
+          } catch { }
+          return updated;
+        });
+      } else if (driveRes?.error) {
+        setDriveError(driveRes.error);
+      }
+    } catch (driveErr) {
+      console.warn("Drive manual backup notice:", driveErr);
+      setDriveError(driveErr instanceof Error ? driveErr.message : "Drive upload failed");
+    } finally {
+      setDriveUploading(false);
     }
   };
 
@@ -830,16 +836,37 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {createdInvoice.drive_file_url && (
+            {createdInvoice.drive_file_url ? (
               <a
                 href={createdInvoice.drive_file_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-[#0b1f3a] text-white hover:bg-[#132c50] transition-colors shadow-sm"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-700 text-white hover:bg-emerald-800 transition-colors shadow-sm"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
                 View in Google Drive
               </a>
+            ) : (
+              <Button
+                size="sm"
+                type="button"
+                onClick={() => handleBackupToDrive(createdInvoice)}
+                disabled={driveUploading}
+                className="text-xs h-8 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                title="Save this specific invoice to Google Drive"
+              >
+                {driveUploading ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Backing up...</span>
+                  </>
+                ) : (
+                  <>
+                    <CloudUpload className="h-3.5 w-3.5" />
+                    <span>Save to Google Drive</span>
+                  </>
+                )}
+              </Button>
             )}
             <InvoicePDFActions invoice={createdInvoice} size="sm" />
             <Link href="/invoices">
