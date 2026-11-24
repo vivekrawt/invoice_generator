@@ -61,8 +61,34 @@ export default function InvoicesPage() {
     setLoading(true);
     setErrorMessage(null);
     try {
-      setInvoices(await apiRequest<Invoice[]>("/api/data/invoices"));
+      const serverInvoices = await apiRequest<Invoice[]>("/api/data/invoices");
+      let finalInvoices = Array.isArray(serverInvoices) ? serverInvoices : [];
+
+      // Merge with localStorage cached invoices (resilience against serverless stateless restarts)
+      try {
+        const local = JSON.parse(localStorage.getItem("abira_saved_invoices") || "[]") as Invoice[];
+        if (local.length > 0) {
+          const map = new Map<string, Invoice>();
+          local.forEach((inv) => map.set(inv.id, inv));
+          finalInvoices.forEach((inv) => map.set(inv.id, inv));
+          finalInvoices = Array.from(map.values());
+        }
+      } catch {}
+
+      setInvoices(finalInvoices);
+      try {
+        localStorage.setItem("abira_saved_invoices", JSON.stringify(finalInvoices));
+      } catch {}
     } catch (error) {
+      // Fallback to localStorage on network or server error
+      try {
+        const local = JSON.parse(localStorage.getItem("abira_saved_invoices") || "[]") as Invoice[];
+        if (local.length > 0) {
+          setInvoices(local);
+          setLoading(false);
+          return;
+        }
+      } catch {}
       setErrorMessage(error instanceof Error ? `Invoices could not be loaded: ${error.message}` : "Invoices could not be loaded.");
       setInvoices([]);
     } finally {
@@ -70,10 +96,27 @@ export default function InvoicesPage() {
     }
   }, []);
 
+  // Immediate hydration on mount from localStorage
+  React.useEffect(() => {
+    try {
+      const local = JSON.parse(localStorage.getItem("abira_saved_invoices") || "[]") as Invoice[];
+      if (local.length > 0) {
+        setInvoices(local);
+        setLoading(false);
+      }
+    } catch {}
+  }, []);
+
   React.useEffect(() => {
     void loadInvoices();
-    apiRequest<{ isConfigured: boolean; folderUrl?: string; clientEmail?: string }>("/api/drive/status")
-      .then((status) => setDriveStatus(status))
+    apiRequest<{ configured?: boolean; isConfigured?: boolean; folderUrl?: string; clientEmail?: string }>("/api/drive/status")
+      .then((status) => {
+        setDriveStatus({
+          isConfigured: Boolean(status.isConfigured || status.configured),
+          folderUrl: status.folderUrl,
+          clientEmail: status.clientEmail,
+        });
+      })
       .catch(() => setDriveStatus(null));
   }, [loadInvoices]);
 
@@ -81,18 +124,23 @@ export default function InvoicesPage() {
     setSyncingInvoiceId(invId);
     setErrorMessage(null);
     try {
+      const targetInvoice = invoices.find((i) => i.id === invId);
       const res = await apiRequest<{ success: boolean; webViewLink?: string; error?: string }>("/api/drive/upload", {
         method: "POST",
-        body: jsonBody({ invoiceId: invId }),
+        body: jsonBody({ invoiceId: invId, invoice: targetInvoice }),
       });
       if (res?.success && res?.webViewLink) {
-        setInvoices((prev) =>
-          prev.map((inv) =>
+        setInvoices((prev) => {
+          const updated = prev.map((inv) =>
             inv.id === invId
               ? { ...inv, drive_file_url: res.webViewLink, drive_synced_at: new Date().toISOString() }
               : inv
-          )
-        );
+          );
+          try {
+            localStorage.setItem("abira_saved_invoices", JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
         setSyncSuccessMessage("Invoice uploaded to Google Drive successfully.");
         setTimeout(() => setSyncSuccessMessage(null), 4000);
       }

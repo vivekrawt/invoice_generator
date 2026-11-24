@@ -35,14 +35,35 @@ export default function DashboardPage() {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
+    // Immediate hydration from localStorage so dashboard counters show generated invoices immediately
+    try {
+      const local = JSON.parse(localStorage.getItem("abira_saved_invoices") || "[]") as Invoice[];
+      if (local.length > 0) {
+        setInvoicesCount(local.length);
+        setRecentInvoices(local.slice(0, 5));
+      }
+    } catch {}
+
     async function loadDashboardData() {
       try {
         setLoading(true);
         const data = await apiRequest<DashboardData>("/api/data/dashboard");
-        setInvoicesCount(data.invoicesCount);
+        let count = data.invoicesCount;
+        let recents = data.recentInvoices;
+
+        // If client has cached invoices, merge to ensure nothing vanishes
+        try {
+          const local = JSON.parse(localStorage.getItem("abira_saved_invoices") || "[]") as Invoice[];
+          if (local.length > count) {
+            count = local.length;
+            recents = local.slice(0, 5);
+          }
+        } catch {}
+
+        setInvoicesCount(count);
         setCustomersCount(data.customersCount);
         setProductsCount(data.productsCount);
-        setRecentInvoices(data.recentInvoices);
+        setRecentInvoices(recents);
         setBusinessProfile(data.businessProfile);
       } catch (err) {
         console.error("Could not load local dashboard data:", err);

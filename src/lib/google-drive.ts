@@ -10,26 +10,57 @@ interface DriveConfig {
 }
 
 export function getDriveConfig(): DriveConfig {
-  const clientEmail =
+  let clientEmail = (
     process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
     process.env.GOOGLE_CLIENT_EMAIL ||
-    "";
-  const privateKey =
+    ""
+  ).trim();
+  let privateKey = (
     process.env.GOOGLE_PRIVATE_KEY ||
     process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY ||
-    "";
-  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID || "";
+    ""
+  ).trim();
+  let folderId = (process.env.GOOGLE_DRIVE_FOLDER_ID || "").trim();
+
+  // Strip surrounding quotes if user wrapped them in "..." or '...'
+  if (
+    (clientEmail.startsWith('"') && clientEmail.endsWith('"')) ||
+    (clientEmail.startsWith("'") && clientEmail.endsWith("'"))
+  ) {
+    clientEmail = clientEmail.slice(1, -1).trim();
+  }
+  if (
+    (privateKey.startsWith('"') && privateKey.endsWith('"')) ||
+    (privateKey.startsWith("'") && privateKey.endsWith("'"))
+  ) {
+    privateKey = privateKey.slice(1, -1).trim();
+  }
+  if (
+    (folderId.startsWith('"') && folderId.endsWith('"')) ||
+    (folderId.startsWith("'") && folderId.endsWith("'"))
+  ) {
+    folderId = folderId.slice(1, -1).trim();
+  }
+
+  // If the user pasted the entire Google Drive folder URL instead of just the folder ID:
+  // e.g. https://drive.google.com/drive/folders/1abcXYZ_123...
+  if (folderId.includes("/folders/")) {
+    const match = folderId.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+    if (match?.[1]) {
+      folderId = match[1];
+    }
+  }
 
   const isConfigured = Boolean(
-    clientEmail.trim() && privateKey.trim() && folderId.trim()
+    clientEmail.length > 0 && privateKey.length > 0 && folderId.length > 0
   );
 
   return {
     isConfigured,
-    clientEmail: clientEmail.trim() || undefined,
-    folderId: folderId.trim() || undefined,
-    folderUrl: folderId.trim()
-      ? `https://drive.google.com/drive/folders/${folderId.trim()}`
+    clientEmail: clientEmail || undefined,
+    folderId: folderId || undefined,
+    folderUrl: folderId
+      ? `https://drive.google.com/drive/folders/${folderId}`
       : undefined,
   };
 }
@@ -42,10 +73,19 @@ function getDriveClient() {
     );
   }
 
-  let privateKey =
+  let privateKey = (
     process.env.GOOGLE_PRIVATE_KEY ||
     process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY ||
-    "";
+    ""
+  ).trim();
+
+  // Strip surrounding quotes if present
+  if (
+    (privateKey.startsWith('"') && privateKey.endsWith('"')) ||
+    (privateKey.startsWith("'") && privateKey.endsWith("'"))
+  ) {
+    privateKey = privateKey.slice(1, -1).trim();
+  }
 
   // Handle newline escapes in private key environment variables
   if (privateKey.includes("\\n")) {

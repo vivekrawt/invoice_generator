@@ -5,6 +5,7 @@ import { requireAppAuth } from "@/lib/supabase/http";
 import { getInvoice, updateInvoiceDriveUrl } from "@/lib/supabase/store";
 import { uploadInvoicePdfToDrive, getDriveConfig } from "@/lib/google-drive";
 import { InvoicePDFDocument } from "@/components/invoices/invoice-pdf-document";
+import type { Invoice } from "@/types/database.types";
 
 export const maxDuration = 60; // Allow sufficient time for PDF rendering and Drive upload
 
@@ -26,19 +27,24 @@ export async function POST(req: NextRequest) {
     const context = auth.context;
 
     const body = await req.json();
-    const { invoiceId, pdfBase64 } = body as {
+    const { invoiceId, pdfBase64, invoice: inlineInvoice } = body as {
       invoiceId?: string;
       pdfBase64?: string;
+      invoice?: Invoice;
     };
 
-    if (!invoiceId) {
-      return NextResponse.json(
-        { success: false, error: "Missing invoiceId parameter." },
-        { status: 400 }
-      );
+    let invoice: Invoice;
+    if (inlineInvoice && inlineInvoice.invoice_number) {
+      invoice = inlineInvoice;
+    } else {
+      if (!invoiceId) {
+        return NextResponse.json(
+          { success: false, error: "Missing invoiceId parameter." },
+          { status: 400 }
+        );
+      }
+      invoice = await getInvoice(context, invoiceId);
     }
-
-    const invoice = await getInvoice(context, invoiceId);
 
     let pdfBuffer: Buffer;
     if (pdfBase64) {
@@ -54,12 +60,16 @@ export async function POST(req: NextRequest) {
     const uploadResult = await uploadInvoicePdfToDrive(invoice, pdfBuffer);
 
     // Update invoice record with the Google Drive link
-    await updateInvoiceDriveUrl(
-      context,
-      invoiceId,
-      uploadResult.fileId,
-      uploadResult.webViewLink
-    );
+    try {
+      await updateInvoiceDriveUrl(
+        context,
+        invoice.id,
+        uploadResult.fileId,
+        uploadResult.webViewLink
+      );
+    } catch (dbErr) {
+      console.warn("Could not update invoice in database with Drive URL:", dbErr);
+    }
 
     return NextResponse.json({
       success: true,

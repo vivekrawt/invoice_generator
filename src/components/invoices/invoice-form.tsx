@@ -123,6 +123,7 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
     (HARDCODED_BUSINESS_PROFILE.default_payment_account as "account1" | "account2") || "account1"
   );
   const [driveUploading, setDriveUploading] = React.useState(false);
+  const [driveError, setDriveError] = React.useState<string | null>(null);
 
   const [bankAccountName, setBankAccountName] = React.useState<string>(
     HARDCODED_BUSINESS_PROFILE.bank_account_name || ""
@@ -337,7 +338,7 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
             if (localCachedProfile.stamp_url) setStampUrl(localCachedProfile.stamp_url);
             if (localCachedProfile.signature_url) setSignatureUrl(localCachedProfile.signature_url);
           }
-        } catch {}
+        } catch { }
 
         const businessProfileData = await apiRequest<BusinessProfile>("/api/data/business-profile");
         if (active) {
@@ -382,7 +383,7 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
 
           try {
             localStorage.setItem("abira_business_profile", JSON.stringify(mergedProfile));
-          } catch {}
+          } catch { }
         }
       } catch (err) {
         if (active) {
@@ -611,8 +612,8 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
         po_date: poDate || null,
         customer_id:
           selectedCustomer.id.startsWith("cust-") ||
-          selectedCustomer.id.startsWith("local-") ||
-          selectedCustomer.id.startsWith("snapshot-")
+            selectedCustomer.id.startsWith("local-") ||
+            selectedCustomer.id.startsWith("snapshot-")
             ? null
             : selectedCustomer.id,
         customer_name: selectedCustomer.customer_name,
@@ -657,21 +658,46 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
       );
       setCreatedInvoice(savedInvoice);
 
-      // Trigger automatic background Google Drive backup
+      // Save locally to browser localStorage so invoices are NEVER lost across serverless cold starts
+      try {
+        const existing = JSON.parse(localStorage.getItem("abira_saved_invoices") || "[]") as Invoice[];
+        const updated = [savedInvoice, ...existing.filter((i) => i.id !== savedInvoice.id)];
+        localStorage.setItem("abira_saved_invoices", JSON.stringify(updated));
+      } catch (storageErr) {
+        console.warn("localStorage cache notice:", storageErr);
+      }
+
+      // Trigger automatic background Google Drive backup with inline invoice payload
       setDriveUploading(true);
+      setDriveError(null);
       apiRequest<{ success: boolean; webViewLink?: string; error?: string }>("/api/drive/upload", {
         method: "POST",
-        body: jsonBody({ invoiceId: savedInvoice.id }),
+        body: jsonBody({ invoiceId: savedInvoice.id, invoice: savedInvoice }),
       })
         .then((driveRes) => {
           if (driveRes?.success && driveRes?.webViewLink) {
-            setCreatedInvoice((prev) =>
-              prev ? { ...prev, drive_file_url: driveRes.webViewLink, drive_synced_at: new Date().toISOString() } : prev
-            );
+            setDriveError(null);
+            setCreatedInvoice((prev) => {
+              if (!prev) return prev;
+              const updated = {
+                ...prev,
+                drive_file_url: driveRes.webViewLink,
+                drive_synced_at: new Date().toISOString(),
+              };
+              try {
+                const existing = JSON.parse(localStorage.getItem("abira_saved_invoices") || "[]") as Invoice[];
+                const localUpdated = existing.map((i) => (i.id === updated.id ? updated : i));
+                localStorage.setItem("abira_saved_invoices", JSON.stringify(localUpdated));
+              } catch {}
+              return updated;
+            });
+          } else if (driveRes?.error) {
+            setDriveError(driveRes.error);
           }
         })
         .catch((driveErr) => {
           console.warn("Drive auto-backup notice:", driveErr);
+          setDriveError(driveErr instanceof Error ? driveErr.message : "Drive upload failed");
         })
         .finally(() => {
           setDriveUploading(false);
@@ -782,6 +808,12 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
                 <p className="text-emerald-700 text-[11px] font-medium mt-1 flex items-center gap-1.5">
                   <Loader2 className="h-3 w-3 animate-spin text-emerald-600" />
                   Backing up invoice PDF to Google Drive...
+                </p>
+              )}
+              {driveError && (
+                <p className="text-amber-800 text-[11px] font-medium mt-1 flex items-center gap-1.5">
+                  <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                  Google Drive notice: {driveError}
                 </p>
               )}
             </div>
@@ -1353,15 +1385,13 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
                 role="button"
                 tabIndex={0}
                 onClick={() => handleAccountSelect("account1")}
-                className={`relative flex items-start gap-3 p-3.5 rounded-lg border cursor-pointer transition-all ${
-                  selectedAccount === "account1"
-                    ? "border-[#0b1f3a] bg-blue-50/40 shadow-sm ring-1 ring-[#0b1f3a]"
-                    : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 bg-white"
-                }`}
+                className={`relative flex items-start gap-3 p-3.5 rounded-lg border cursor-pointer transition-all ${selectedAccount === "account1"
+                  ? "border-[#0b1f3a] bg-blue-50/40 shadow-sm ring-1 ring-[#0b1f3a]"
+                  : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 bg-white"
+                  }`}
               >
-                <div className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                  selectedAccount === "account1" ? "border-[#0b1f3a] bg-[#0b1f3a] text-white" : "border-slate-300 bg-white"
-                }`}>
+                <div className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${selectedAccount === "account1" ? "border-[#0b1f3a] bg-[#0b1f3a] text-white" : "border-slate-300 bg-white"
+                  }`}>
                   {selectedAccount === "account1" && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
                 </div>
                 <div className="flex-1 min-w-0 space-y-1">
@@ -1400,15 +1430,13 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
                 role="button"
                 tabIndex={0}
                 onClick={() => handleAccountSelect("account2")}
-                className={`relative flex items-start gap-3 p-3.5 rounded-lg border cursor-pointer transition-all ${
-                  selectedAccount === "account2"
-                    ? "border-[#0b1f3a] bg-blue-50/40 shadow-sm ring-1 ring-[#0b1f3a]"
-                    : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 bg-white"
-                }`}
+                className={`relative flex items-start gap-3 p-3.5 rounded-lg border cursor-pointer transition-all ${selectedAccount === "account2"
+                  ? "border-[#0b1f3a] bg-blue-50/40 shadow-sm ring-1 ring-[#0b1f3a]"
+                  : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 bg-white"
+                  }`}
               >
-                <div className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                  selectedAccount === "account2" ? "border-[#0b1f3a] bg-[#0b1f3a] text-white" : "border-slate-300 bg-white"
-                }`}>
+                <div className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${selectedAccount === "account2" ? "border-[#0b1f3a] bg-[#0b1f3a] text-white" : "border-slate-300 bg-white"
+                  }`}>
                   {selectedAccount === "account2" && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
                 </div>
                 <div className="flex-1 min-w-0 space-y-1">
@@ -1714,11 +1742,10 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
               <button
                 type="button"
                 onClick={() => setSelectedCategory("ALL")}
-                className={`px-2 py-0.5 rounded text-[11px] font-medium whitespace-nowrap ${
-                  selectedCategory === "ALL"
-                    ? "bg-[#0b1f3a] text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium whitespace-nowrap ${selectedCategory === "ALL"
+                  ? "bg-[#0b1f3a] text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
               >
                 All ({BROCHURE_PRODUCTS.length})
               </button>
@@ -1727,11 +1754,10 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
                   key={cat}
                   type="button"
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-2 py-0.5 rounded text-[11px] font-medium whitespace-nowrap ${
-                    selectedCategory === cat
-                      ? "bg-[#0b1f3a] text-white"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium whitespace-nowrap ${selectedCategory === cat
+                    ? "bg-[#0b1f3a] text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
                 >
                   {cat}
                 </button>

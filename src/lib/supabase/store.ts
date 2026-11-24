@@ -93,7 +93,7 @@ interface MemoryStorage {
 
 const memoryStore: MemoryStorage = {
   profile: tryReadLocalJson<BusinessProfile>("business-profile.json", profileDefaults()),
-  customers: [],
+  customers: tryReadLocalJson<Customer[]>("customers.json", []),
   products: BROCHURE_PRODUCTS.map((p, idx) => ({
     id: `prod-${idx + 1}`,
     category: p.category,
@@ -102,7 +102,7 @@ const memoryStore: MemoryStorage = {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   })),
-  invoices: [],
+  invoices: tryReadLocalJson<Invoice[]>("invoices.json", []),
   assets: [],
   rateCharts: tryReadLocalJson<RateChart[]>("rate-charts.json", []),
 };
@@ -556,7 +556,7 @@ export async function saveInvoice(
   // Attempt Supabase insert if client is active
   if (context.supabase) {
     try {
-      await context.supabase.from("invoices").upsert({
+      const { error: invError } = await context.supabase.from("invoices").upsert({
         id,
         owner_id: context.user.id,
         invoice_number: invoice.invoice_number,
@@ -579,8 +579,10 @@ export async function saveInvoice(
         additional_notes: invoice.additional_notes || null,
       } as any);
 
-      if (formattedItems.length > 0) {
-        await context.supabase.from("invoice_items").upsert(
+      if (invError) {
+        console.error("Supabase invoice insert error:", invError);
+      } else if (formattedItems.length > 0) {
+        const { error: itemsError } = await context.supabase.from("invoice_items").upsert(
           formattedItems.map((it, pIdx) => ({
             id: it.id,
             owner_id: context.user.id,
@@ -598,17 +600,22 @@ export async function saveInvoice(
             total_price: it.line_amount,
           })) as any
         );
+        if (itemsError) {
+          console.error("Supabase invoice_items error:", itemsError);
+        }
       }
     } catch (e) {
       console.warn("Supabase saveInvoice notice (saved in memory):", e);
     }
   }
 
+  tryWriteLocalJson("invoices.json", memoryStore.invoices);
   return fullInvoice;
 }
 
 export async function deleteInvoice({ supabase, user }: StoreContext, id: string) {
   memoryStore.invoices = memoryStore.invoices.filter((inv) => inv.id !== id);
+  tryWriteLocalJson("invoices.json", memoryStore.invoices);
   if (supabase) {
     try {
       await supabase.from("invoices").delete().eq("id", id);
@@ -645,7 +652,8 @@ export async function updateInvoiceDriveUrl(
       console.warn("Supabase updateInvoiceDriveUrl notice:", e);
     }
   }
-  return inv || getInvoice(context, invoiceId);
+  tryWriteLocalJson("invoices.json", memoryStore.invoices);
+  return inv || ({ id: invoiceId, drive_file_id: driveFileId, drive_file_url: driveFileUrl } as any);
 }
 
 // DASHBOARD

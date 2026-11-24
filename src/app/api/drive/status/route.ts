@@ -6,6 +6,7 @@ export async function GET() {
     const config = getDriveConfig();
     return NextResponse.json({
       configured: config.isConfigured,
+      isConfigured: config.isConfigured,
       clientEmail: config.clientEmail || null,
       folderId: config.folderId || null,
       folderUrl: config.folderUrl || null,
@@ -14,6 +15,7 @@ export async function GET() {
     return NextResponse.json(
       {
         configured: false,
+        isConfigured: false,
         error: error instanceof Error ? error.message : "Error checking Drive status",
       },
       { status: 500 }
