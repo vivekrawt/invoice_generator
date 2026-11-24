@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import React from "react";
-import { pdf } from "@react-pdf/renderer";
+import { renderToBuffer } from "@react-pdf/renderer";
 import { requireAppAuth } from "@/lib/supabase/http";
 import { getInvoice, updateInvoiceDriveUrl } from "@/lib/supabase/store";
 import { uploadInvoicePdfToDrive, getDriveConfig } from "@/lib/google-drive";
@@ -52,9 +52,7 @@ export async function POST(req: NextRequest) {
     } else {
       // Render PDF server-side using React PDF
       const doc = React.createElement(InvoicePDFDocument, { invoice });
-      const blob = await pdf(doc as any).toBlob();
-      const arrayBuffer = await blob.arrayBuffer();
-      pdfBuffer = Buffer.from(arrayBuffer);
+      pdfBuffer = await renderToBuffer(doc as any);
     }
 
     const uploadResult = await uploadInvoicePdfToDrive(invoice, pdfBuffer);

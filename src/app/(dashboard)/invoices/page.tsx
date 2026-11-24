@@ -29,6 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { InvoicePDFActions } from "@/components/invoices/invoice-pdf-actions";
+import { generateInvoicePdfBase64 } from "@/lib/pdf-export";
 import { apiRequest, jsonBody } from "@/lib/api-client";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Invoice } from "@/types/database.types";
@@ -125,9 +126,18 @@ export default function InvoicesPage() {
     setErrorMessage(null);
     try {
       const targetInvoice = invoices.find((i) => i.id === invId);
+      if (!targetInvoice) throw new Error("Invoice not found.");
+
+      let pdfBase64: string | undefined = undefined;
+      try {
+        pdfBase64 = await generateInvoicePdfBase64(targetInvoice);
+      } catch (pdfErr) {
+        console.warn("Client PDF generation notice:", pdfErr);
+      }
+
       const res = await apiRequest<{ success: boolean; webViewLink?: string; error?: string }>("/api/drive/upload", {
         method: "POST",
-        body: jsonBody({ invoiceId: invId, invoice: targetInvoice }),
+        body: jsonBody({ invoiceId: invId, invoice: targetInvoice, pdfBase64 }),
       });
       if (res?.success && res?.webViewLink) {
         setInvoices((prev) => {

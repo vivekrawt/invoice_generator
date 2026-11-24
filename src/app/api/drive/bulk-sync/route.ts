@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import React from "react";
-import { pdf } from "@react-pdf/renderer";
+import { renderToBuffer } from "@react-pdf/renderer";
 import { requireAppAuth } from "@/lib/supabase/http";
 import { listInvoices, updateInvoiceDriveUrl } from "@/lib/supabase/store";
 import { uploadInvoicePdfToDrive, getDriveConfig } from "@/lib/google-drive";
@@ -46,9 +46,7 @@ export async function POST() {
     for (const inv of unbackedInvoices) {
       try {
         const doc = React.createElement(InvoicePDFDocument, { invoice: inv });
-        const blob = await pdf(doc as any).toBlob();
-        const arrayBuffer = await blob.arrayBuffer();
-        const pdfBuffer = Buffer.from(arrayBuffer);
+        const pdfBuffer = await renderToBuffer(doc as any);
 
         const uploadResult = await uploadInvoicePdfToDrive(inv, pdfBuffer);
 

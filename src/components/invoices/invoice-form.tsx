@@ -45,6 +45,7 @@ import type {
   Invoice,
 } from "@/types/database.types";
 import { InvoicePDFActions } from "@/components/invoices/invoice-pdf-actions";
+import { generateInvoicePdfBase64 } from "@/lib/pdf-export";
 
 interface FormItem {
   id: string;
@@ -667,13 +668,23 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
         console.warn("localStorage cache notice:", storageErr);
       }
 
-      // Trigger automatic background Google Drive backup with inline invoice payload
+      // Trigger automatic background Google Drive backup with inline invoice payload & client-rendered PDF
       setDriveUploading(true);
       setDriveError(null);
-      apiRequest<{ success: boolean; webViewLink?: string; error?: string }>("/api/drive/upload", {
-        method: "POST",
-        body: jsonBody({ invoiceId: savedInvoice.id, invoice: savedInvoice }),
-      })
+
+      (async () => {
+        let pdfBase64: string | undefined = undefined;
+        try {
+          pdfBase64 = await generateInvoicePdfBase64(savedInvoice);
+        } catch (pdfErr) {
+          console.warn("Client PDF generation for Drive backup notice:", pdfErr);
+        }
+
+        return await apiRequest<{ success: boolean; webViewLink?: string; error?: string }>("/api/drive/upload", {
+          method: "POST",
+          body: jsonBody({ invoiceId: savedInvoice.id, invoice: savedInvoice, pdfBase64 }),
+        });
+      })()
         .then((driveRes) => {
           if (driveRes?.success && driveRes?.webViewLink) {
             setDriveError(null);

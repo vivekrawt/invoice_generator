@@ -492,21 +492,15 @@ export function InvoicePDFDocument({ invoice }: { invoice: Invoice }) {
         <View style={styles.topHeader}>
           {/* Header Left: ABIRA Enterprises details */}
           <View style={styles.headerLeft}>
-            <Text style={styles.businessName}>{b.business_name}</Text>
-            <Text style={styles.businessMeta}>{b.address}</Text>
-            <Text style={styles.businessMeta}>
-              Phone: <Text style={styles.businessHighlight}>{b.phone}</Text>
-            </Text>
-            {b.email && (
-              <Text style={styles.businessMeta}>
-                Email: <Text style={styles.businessHighlight}>{b.email}</Text>
-              </Text>
-            )}
-            {b.pan && (
-              <Text style={styles.businessMeta}>
-                PAN: <Text style={styles.businessHighlight}>{b.pan}</Text>
-              </Text>
-            )}
+            <Text style={styles.businessName}>{b.business_name || "ABIRA Enterprises"}</Text>
+            <Text style={styles.businessMeta}>{b.address || ""}</Text>
+            <Text style={styles.businessMeta}>Phone: {b.phone || ""}</Text>
+            {b.email ? (
+              <Text style={styles.businessMeta}>Email: {b.email}</Text>
+            ) : null}
+            {b.pan ? (
+              <Text style={styles.businessMeta}>PAN: {b.pan}</Text>
+            ) : null}
           </View>
 
           {/* Header Right: INVOICE title & metadata */}
@@ -521,18 +515,18 @@ export function InvoicePDFDocument({ invoice }: { invoice: Invoice }) {
                 <Text style={styles.metaLabel}>Invoice Date:</Text>
                 <Text style={styles.metaValue}>{formatDate(invoice.invoice_date)}</Text>
               </View>
-              {invoice.po_number && (
+              {invoice.po_number ? (
                 <View style={styles.metaRow}>
                   <Text style={styles.metaLabel}>PO Number:</Text>
                   <Text style={styles.metaValue}>{invoice.po_number}</Text>
                 </View>
-              )}
-              {invoice.po_date && (
+              ) : null}
+              {invoice.po_date ? (
                 <View style={styles.metaRow}>
                   <Text style={styles.metaLabel}>PO Date:</Text>
                   <Text style={styles.metaValue}>{formatDate(invoice.po_date)}</Text>
                 </View>
-              )}
+              ) : null}
             </View>
           </View>
         </View>
@@ -542,41 +536,39 @@ export function InvoicePDFDocument({ invoice }: { invoice: Invoice }) {
           {/* BILL TO */}
           <View style={styles.addressBox}>
             <Text style={styles.addressTitle}>BILL TO:</Text>
-            <Text style={styles.clientName}>{c.customer_name}</Text>
-            <Text style={styles.addressText}>{c?.billing_address}</Text>
+            <Text style={styles.clientName}>{c.customer_name || ""}</Text>
+            <Text style={styles.addressText}>{c?.billing_address || ""}</Text>
             <Text style={styles.addressText}>
-              {c?.city}, {c?.state} – {c?.pincode}
+              {c?.city || ""}, {c?.state || ""} – {c?.pincode || ""}
             </Text>
-            <Text style={styles.addressText}>Phone: {c?.phone}</Text>
-            {c?.gstin && (
-              <Text style={styles.addressText}>
-                GSTIN: <Text style={styles.businessHighlight}>{c.gstin}</Text>
-              </Text>
-            )}
+            <Text style={styles.addressText}>Phone: {c?.phone || ""}</Text>
+            {c?.gstin ? (
+              <Text style={styles.addressText}>GSTIN: {c.gstin}</Text>
+            ) : null}
           </View>
 
           {/* SHIP TO (If different) or Mirror */}
           <View style={styles.addressBox}>
             <Text style={styles.addressTitle}>SHIP TO:</Text>
             {s && s.delivery_address ? (
-              <>
-                <Text style={styles.clientName}>{s.recipient_name || c?.customer_name}</Text>
-                <Text style={styles.addressText}>{s.delivery_address}</Text>
+              <View>
+                <Text style={styles.clientName}>{s.recipient_name || c?.customer_name || ""}</Text>
+                <Text style={styles.addressText}>{s.delivery_address || ""}</Text>
                 <Text style={styles.addressText}>
-                  {s.city}, {s.state} – {s.pincode}
+                  {s.city || ""}, {s.state || ""} – {s.pincode || ""}
                 </Text>
-              </>
+              </View>
             ) : (
-              <>
-                <Text style={styles.clientName}>{c?.customer_name}</Text>
-                <Text style={styles.addressText}>{c?.billing_address}</Text>
+              <View>
+                <Text style={styles.clientName}>{c?.customer_name || ""}</Text>
+                <Text style={styles.addressText}>{c?.billing_address || ""}</Text>
                 <Text style={styles.addressText}>
-                  {c?.city}, {c?.state} – {c?.pincode}
+                  {c?.city || ""}, {c?.state || ""} – {c?.pincode || ""}
                 </Text>
                 <Text style={[styles.addressText, { fontStyle: "italic", marginTop: 2 }]}>
                   (Same as billing address)
                 </Text>
-              </>
+              </View>
             )}
           </View>
         </View>
@@ -735,12 +727,12 @@ export function InvoicePDFDocument({ invoice }: { invoice: Invoice }) {
 
               <View style={styles.sigLine} />
               <Text style={styles.sigLabel}>Authorized Signatory</Text>
-              {!signatureUrl && (
-                <>
+              {!signatureUrl ? (
+                <View>
                   <Text style={styles.sigDetails}>Name: __________________________</Text>
                   <Text style={styles.sigDetails}>Date: __________________________</Text>
-                </>
-              )}
+                </View>
+              ) : null}
             </View>
           </View>
         </View>
